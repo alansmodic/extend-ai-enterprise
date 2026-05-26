@@ -61,5 +61,6 @@ jobs:
       - name: Run contract suite
         working-directory: extend-ai
         env:
-          WP_TESTS_DIR: /tmp/wordpress-tests-lib
+          WP_TESTS_DIR:      /tmp/wordpress-tests-lib
+          WP_AI_PLUGIN_FILE: ${{ github.workspace }}/wp-ai/ai.php
         run: composer test:contract

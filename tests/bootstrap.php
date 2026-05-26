@@ -2,14 +2,16 @@
 /**
  * PHPUnit bootstrap for the extend-ai-enterprise contract suite.
  *
- * Loads the WordPress test scaffolding (set up via
- * `bin/install-wp-tests.sh` or wp-env), then activates the WordPress AI
- * plugin and ours. Contract tests assert that the integration points we
- * depend on still exist with the expected signatures.
+ * Loads the WordPress test scaffolding, then activates the WP AI plugin and
+ * ours. Contract tests assert that the integration points we depend on still
+ * exist with the expected signatures.
  *
- * Usage:
- *   composer install
- *   WP_TESTS_DIR=/tmp/wordpress-tests-lib ./vendor/bin/phpunit --testsuite=contract
+ * Plugin paths can be overridden via env vars:
+ *
+ *   WP_AI_PLUGIN_FILE  Absolute path to WordPress/ai's ai.php.
+ *                      Defaults to a sibling plugin install.
+ *   WP_TESTS_DIR       WordPress test library location.
+ *                      Defaults to /tmp/wordpress-tests-lib.
  */
 
 declare( strict_types=1 );
@@ -22,11 +24,33 @@ if ( ! file_exists( $_tests_dir . '/includes/functions.php' ) ) {
 
 require_once $_tests_dir . '/includes/functions.php';
 
-tests_add_filter( 'muplugins_loaded', static function (): void {
-	$plugins_dir = dirname( __DIR__, 2 );
+$_ai_plugin = getenv( 'WP_AI_PLUGIN_FILE' ) ?: null;
 
-	require_once $plugins_dir . '/ai/ai.php';
-	require_once dirname( __DIR__ ) . '/extend-ai-enterprise.php';
+if ( ! $_ai_plugin ) {
+	// Try common locations relative to this checkout.
+	$candidates = [
+		dirname( __DIR__, 2 ) . '/ai/ai.php',     // sibling plugin directory
+		dirname( __DIR__, 2 ) . '/wp-ai/ai.php',  // CI layout (separate checkout)
+		'/tmp/wordpress/wp-content/plugins/ai/ai.php',
+	];
+	foreach ( $candidates as $candidate ) {
+		if ( file_exists( $candidate ) ) {
+			$_ai_plugin = $candidate;
+			break;
+		}
+	}
+}
+
+if ( ! $_ai_plugin || ! file_exists( $_ai_plugin ) ) {
+	fwrite( STDERR, "WordPress AI plugin not found. Set WP_AI_PLUGIN_FILE to its ai.php path.\n" );
+	exit( 1 );
+}
+
+$_self_plugin = dirname( __DIR__ ) . '/extend-ai-enterprise.php';
+
+tests_add_filter( 'muplugins_loaded', static function () use ( $_ai_plugin, $_self_plugin ): void {
+	require_once $_ai_plugin;
+	require_once $_self_plugin;
 } );
 
 require $_tests_dir . '/includes/bootstrap.php';
