@@ -126,6 +126,8 @@ final class WPAI_Contract_Test extends WP_UnitTestCase {
 			'No callbacks on wp_abilities_api_init — WP AI experiments will never register abilities.'
 		);
 
+		// Categories must register before abilities that reference them.
+		do_action( 'wp_abilities_api_categories_init' );
 		do_action( 'wp_abilities_api_init' );
 
 		$ai_namespace_count = 0;
