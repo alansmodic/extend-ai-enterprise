@@ -1,0 +1,29 @@
+name: Lint
+
+on:
+  pull_request:
+  push:
+    branches: [ main ]
+
+jobs:
+  phpcs:
+    name: PHPCS (WordPress + PHPCompatibility)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.1'
+          tools: composer, cs2pr
+          coverage: none
+
+      - name: Composer install
+        run: composer install --no-interaction --prefer-dist
+
+      - name: Run PHPCS
+        run: composer lint -- --report=checkstyle --report-file=phpcs-report.xml || true
+
+      - name: Surface PHPCS findings as PR annotations
+        if: always()
+        run: cs2pr ./phpcs-report.xml

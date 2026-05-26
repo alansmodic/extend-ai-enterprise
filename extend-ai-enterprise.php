@@ -27,20 +27,30 @@ define( 'EXTEND_AI_ENTERPRISE_DIR', __DIR__ );
 
 require_once __DIR__ . '/includes/autoload.php';
 
-register_activation_hook( __FILE__, static function (): void {
-	Storage\Usage_Repository::install();
-	Storage\Prompt_Library::install();
-} );
-
-add_action( 'plugins_loaded', static function (): void {
-	if ( ! defined( 'WPAI_VERSION' ) ) {
-		add_action( 'admin_notices', static function (): void {
-			echo '<div class="notice notice-error"><p>';
-			esc_html_e( 'Extend AI — Enterprise requires the WordPress AI plugin to be active.', 'extend-ai-enterprise' );
-			echo '</p></div>';
-		} );
-		return;
+register_activation_hook(
+	__FILE__,
+	static function (): void {
+		Storage\Usage_Repository::install();
+		Storage\Prompt_Library::install();
 	}
+);
 
-	Plugin::instance()->boot();
-}, 20 );
+add_action(
+	'plugins_loaded',
+	static function (): void {
+		if ( ! defined( 'WPAI_VERSION' ) ) {
+			add_action(
+				'admin_notices',
+				static function (): void {
+					echo '<div class="notice notice-error"><p>';
+					esc_html_e( 'Extend AI — Enterprise requires the WordPress AI plugin to be active.', 'extend-ai-enterprise' );
+					echo '</p></div>';
+				}
+			);
+			return;
+		}
+
+		Plugin::instance()->boot();
+	},
+	20
+);

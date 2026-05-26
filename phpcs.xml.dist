@@ -1,0 +1,81 @@
+<?xml version="1.0"?>
+<ruleset name="extend-ai-enterprise">
+	<description>Coding standards for the Extend AI Enterprise plugin.</description>
+
+	<file>extend-ai-enterprise.php</file>
+	<file>includes</file>
+	<file>tests</file>
+
+	<exclude-pattern>*/vendor/*</exclude-pattern>
+	<exclude-pattern>*/node_modules/*</exclude-pattern>
+	<exclude-pattern>*/assets/*</exclude-pattern>
+
+	<arg name="basepath" value="."/>
+	<arg name="colors"/>
+	<arg name="extensions" value="php"/>
+	<arg name="parallel"   value="8"/>
+	<arg value="ps"/>
+
+	<config name="testVersion" value="8.1-"/>
+	<config name="minimum_wp_version" value="6.6"/>
+
+	<rule ref="WordPress-Core">
+		<!-- We use short array syntax; WP-Core forbids it. Modern PHP code, deliberate choice. -->
+		<exclude name="Generic.Arrays.DisallowShortArraySyntax"/>
+		<!-- File-naming conventions don't fit a PSR-4 namespace. -->
+		<exclude name="WordPress.Files.FileName"/>
+		<!-- We use namespaces; the plugin-prefix rule fires false positives on namespaced symbols. -->
+		<exclude name="WordPress.NamingConventions.PrefixAllGlobals"/>
+		<!-- Yoda conditions are dogmatic; modern PHP doesn't need them. -->
+		<exclude name="WordPress.PHP.YodaConditions"/>
+	</rule>
+
+	<rule ref="WordPress-Extra">
+		<exclude name="Generic.Arrays.DisallowShortArraySyntax"/>
+		<exclude name="WordPress.Files.FileName"/>
+		<exclude name="WordPress.NamingConventions.PrefixAllGlobals"/>
+		<exclude name="WordPress.PHP.YodaConditions"/>
+	</rule>
+
+	<rule ref="PHPCompatibilityWP"/>
+
+	<!-- Plugin text domain. -->
+	<rule ref="WordPress.WP.I18n">
+		<properties>
+			<property name="text_domain" type="array">
+				<element value="extend-ai-enterprise"/>
+			</property>
+		</properties>
+	</rule>
+
+	<!--
+		Our Storage/ classes interpolate table names built from $wpdb->prefix +
+		a literal suffix (e.g. 'extend_ai_usage'). All bound values still go
+		through $wpdb->prepare(). The sniff can't statically verify that the
+		interpolated portion is safe, so the warnings are false positives in
+		this directory.
+	-->
+	<rule ref="WordPress.DB.PreparedSQL.InterpolatedNotPrepared">
+		<exclude-pattern>*/includes/Storage/*</exclude-pattern>
+	</rule>
+	<rule ref="WordPress.DB.PreparedSQL.NotPrepared">
+		<exclude-pattern>*/includes/Storage/*</exclude-pattern>
+	</rule>
+
+	<!--
+		WP filters and actions hand callbacks a fixed-arity signature that we
+		can't shrink. "Unused trailing parameter" is a contract requirement,
+		not a code smell.
+	-->
+	<rule ref="Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed">
+		<severity>0</severity>
+	</rule>
+
+	<!--
+		Test bootstrap writes setup errors to STDERR via fwrite(). That's not
+		a WP filesystem operation — it's terminal output before WP is loaded.
+	-->
+	<rule ref="WordPress.WP.AlternativeFunctions.file_system_operations_fwrite">
+		<exclude-pattern>*/tests/*</exclude-pattern>
+	</rule>
+</ruleset>

@@ -13,18 +13,18 @@ namespace ExtendAI\Enterprise\Policy;
 
 final class PII_Redactor {
 
-	private const PATTERNS = [
+	private const PATTERNS = array(
 		'email' => '/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i',
 		'ssn'   => '/\b\d{3}-\d{2}-\d{4}\b/',
 		'phone' => '/\b(?:\+?1[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}\b/',
 		// TODO: credit cards (Luhn-validated), API keys, IBAN, internal IDs per config.
-	];
+	);
 
 	public function register(): void {
 		if ( ! (bool) get_option( 'extend_ai_redact_pii', true ) ) {
 			return;
 		}
-		add_filter( 'wpai_pre_normalize_content', [ $this, 'redact' ], 10, 1 );
+		add_filter( 'wpai_pre_normalize_content', array( $this, 'redact' ), 10, 1 );
 	}
 
 	public function redact( string $content ): string {

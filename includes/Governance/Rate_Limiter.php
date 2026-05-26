@@ -18,7 +18,7 @@ final class Rate_Limiter {
 	private const NS = 'wp-abilities/v1';
 
 	public function register(): void {
-		add_filter( 'rest_pre_dispatch', [ $this, 'enforce' ], 10, 3 );
+		add_filter( 'rest_pre_dispatch', array( $this, 'enforce' ), 10, 3 );
 	}
 
 	/**
@@ -39,7 +39,10 @@ final class Rate_Limiter {
 		$ability_id = $this->route_to_ability( $route );
 		$limits     = $this->limits();
 
-		foreach ( [ 'minute' => 60, 'day' => DAY_IN_SECONDS ] as $window => $ttl ) {
+		foreach ( array(
+			'minute' => 60,
+			'day'    => DAY_IN_SECONDS,
+		) as $window => $ttl ) {
 			$max = (int) ( $limits[ $window ] ?? 0 );
 			if ( $max <= 0 ) {
 				continue;
@@ -50,7 +53,7 @@ final class Rate_Limiter {
 				return new \WP_Error(
 					'extend_ai_rate_limited',
 					sprintf( 'AI rate limit exceeded (%d per %s).', $max, $window ),
-					[ 'status' => 429 ]
+					array( 'status' => 429 )
 				);
 			}
 			set_transient( $key, $count + 1, $ttl );
@@ -68,7 +71,13 @@ final class Rate_Limiter {
 
 	/** @return array<string,int> */
 	private function limits(): array {
-		$opt = (array) get_option( 'extend_ai_rate_limits', [ 'minute' => 20, 'day' => 500 ] );
+		$opt = (array) get_option(
+			'extend_ai_rate_limits',
+			array(
+				'minute' => 20,
+				'day'    => 500,
+			)
+		);
 		/** @var array<string,int> */
 		return (array) apply_filters( 'extend_ai_rate_limits', $opt );
 	}

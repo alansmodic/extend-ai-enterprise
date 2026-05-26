@@ -26,7 +26,7 @@ final class Prompt_Injector {
 	}
 
 	public function register(): void {
-		add_filter( 'wpai_system_instruction', [ $this, 'inject' ], 10, 3 );
+		add_filter( 'wpai_system_instruction', array( $this, 'inject' ), 10, 3 );
 	}
 
 	/**
@@ -81,20 +81,21 @@ final class Prompt_Injector {
 	 */
 	private function variables( string $ability_name, array $data ): array {
 		$user = wp_get_current_user();
-		$vars = [
+		$vars = array(
 			'ability'      => $ability_name,
 			'user_login'   => $user instanceof \WP_User ? $user->user_login : '',
 			'user_role'    => $user instanceof \WP_User ? ( $user->roles[0] ?? '' ) : '',
 			'site_name'    => (string) get_bloginfo( 'name' ),
 			'site_url'     => (string) home_url(),
 			'current_date' => gmdate( 'Y-m-d' ),
-		];
+		);
 
 		// If the ability passed a post_id, expose common post fields.
 		$post_id = (int) ( $data['post_id'] ?? 0 );
-		if ( $post_id > 0 && ( $post = get_post( $post_id ) ) ) {
-			$vars['post_title'] = (string) $post->post_title;
-			$vars['post_type']  = (string) $post->post_type;
+		$post    = $post_id > 0 ? get_post( $post_id ) : null;
+		if ( $post ) {
+			$vars['post_title']  = (string) $post->post_title;
+			$vars['post_type']   = (string) $post->post_type;
 			$vars['post_status'] = (string) $post->post_status;
 		}
 

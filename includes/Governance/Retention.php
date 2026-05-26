@@ -25,10 +25,10 @@ final class Retention {
 	}
 
 	public function register(): void {
-		add_filter( 'wpai_request_log_retention_days', [ $this, 'log_retention_days' ] );
+		add_filter( 'wpai_request_log_retention_days', array( $this, 'log_retention_days' ) );
 
-		add_action( self::HOOK, [ $this, 'sweep_usage' ] );
-		add_action( 'init',     [ $this, 'schedule' ] );
+		add_action( self::HOOK, array( $this, 'sweep_usage' ) );
+		add_action( 'init', array( $this, 'schedule' ) );
 	}
 
 	public function log_retention_days( int $current ): int {

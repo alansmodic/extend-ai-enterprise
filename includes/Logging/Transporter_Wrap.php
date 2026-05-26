@@ -30,9 +30,9 @@ final class Transporter_Wrap {
 	public const FAILURE_TRANSIENT = 'extend_ai_transporter_wrap_failure';
 
 	public function register(): void {
-		add_action( 'wp_loaded',     [ $this, 'wrap' ], 20 );
-		add_action( 'admin_init',    [ $this, 'wrap' ], 20 );
-		add_action( 'admin_notices', [ $this, 'maybe_notice' ] );
+		add_action( 'wp_loaded', array( $this, 'wrap' ), 20 );
+		add_action( 'admin_init', array( $this, 'wrap' ), 20 );
+		add_action( 'admin_notices', array( $this, 'maybe_notice' ) );
 	}
 
 	public function wrap(): void {
@@ -52,9 +52,9 @@ final class Transporter_Wrap {
 				$registry = \WordPress\AiClient\AiClient::defaultRegistry();
 				$inner    = $registry->getHttpTransporter();
 				$registry->setHttpTransporter( self::decorator( $inner ) );
-				$wrapped  = true;
+				$wrapped = true;
 			} catch ( \Throwable $e ) {
-				$reason = $e->getMessage() ?: 'unknown exception';
+				$reason = '' !== $e->getMessage() ? $e->getMessage() : 'unknown exception';
 			}
 		}
 
@@ -157,13 +157,13 @@ final class Transporter_Wrap {
 				$decoded  = json_decode( $body, true );
 				$model    = is_array( $decoded ) ? (string) ( $decoded['model'] ?? '' ) : '';
 
-				$tokens_in = 0;
+				$tokens_in  = 0;
 				$tokens_out = 0;
 				if ( $response && method_exists( $response, 'getBody' ) ) {
 					[ $tokens_in, $tokens_out ] = self::tokens_from_response( (string) $response->getBody() );
 				}
 
-				return [
+				return array(
 					'provider'      => $provider,
 					'model'         => $model,
 					'duration_ms'   => $duration_ms,
@@ -172,8 +172,8 @@ final class Transporter_Wrap {
 					'status'        => $status,
 					'error_message' => $err,
 					'user_id'       => get_current_user_id(),
-					'context'       => [ 'uri' => $uri ],
-				];
+					'context'       => array( 'uri' => $uri ),
+				);
 			}
 
 			private static function provider_from_host( string $host ): string {
@@ -190,16 +190,16 @@ final class Transporter_Wrap {
 			private static function tokens_from_response( string $body ): array {
 				$json = json_decode( $body, true );
 				if ( ! is_array( $json ) ) {
-					return [ 0, 0 ];
+					return array( 0, 0 );
 				}
 				$usage = $json['usage'] ?? null;
 				if ( ! is_array( $usage ) ) {
-					return [ 0, 0 ];
+					return array( 0, 0 );
 				}
 				// OpenAI: prompt_tokens / completion_tokens. Anthropic: input_tokens / output_tokens.
-				$in  = (int) ( $usage['prompt_tokens'] ?? $usage['input_tokens']  ?? 0 );
+				$in  = (int) ( $usage['prompt_tokens'] ?? $usage['input_tokens'] ?? 0 );
 				$out = (int) ( $usage['completion_tokens'] ?? $usage['output_tokens'] ?? 0 );
-				return [ $in, $out ];
+				return array( $in, $out );
 			}
 		};
 	}

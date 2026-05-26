@@ -17,8 +17,8 @@ namespace ExtendAI\Enterprise\Access;
 final class Credential_Vault {
 
 	public function register(): void {
-		add_filter( 'wpai_has_ai_credentials',              [ $this, 'has_credentials' ], 10, 2 );
-		add_filter( 'wpai_pre_has_valid_credentials_check', [ $this, 'valid_credentials' ], 10 );
+		add_filter( 'wpai_has_ai_credentials', array( $this, 'has_credentials' ), 10, 2 );
+		add_filter( 'wpai_pre_has_valid_credentials_check', array( $this, 'valid_credentials' ), 10 );
 	}
 
 	/**

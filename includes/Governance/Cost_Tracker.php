@@ -21,8 +21,8 @@ final class Cost_Tracker {
 	}
 
 	public function register(): void {
-		add_action( 'extend_ai_request_completed', [ $this, 'record' ], 10, 1 );
-		add_filter( 'extend_ai_model_allowlist',   [ $this, 'enforce_budget' ], 10, 2 );
+		add_action( 'extend_ai_request_completed', array( $this, 'record' ), 10, 1 );
+		add_filter( 'extend_ai_model_allowlist', array( $this, 'enforce_budget' ), 10, 2 );
 	}
 
 	/** @param array<string,mixed> $payload */
@@ -30,10 +30,10 @@ final class Cost_Tracker {
 		if ( ( $payload['status'] ?? '' ) !== 'success' ) {
 			return;
 		}
-		$tokens_in  = (int) ( $payload['tokens_input']  ?? 0 );
+		$tokens_in  = (int) ( $payload['tokens_input'] ?? 0 );
 		$tokens_out = (int) ( $payload['tokens_output'] ?? 0 );
 		$provider   = (string) ( $payload['provider'] ?? '' );
-		$model      = (string) ( $payload['model']    ?? '' );
+		$model      = (string) ( $payload['model'] ?? '' );
 
 		$usd = $this->price( $provider, $model, $tokens_in, $tokens_out );
 
@@ -48,14 +48,18 @@ final class Cost_Tracker {
 		);
 	}
 
-	/** @param array<int, array{0:string,1:string}> $list */
-	public function enforce_budget( array $list, string $capability ): array {
+	/**
+	 * @param array<int, array{0:string,1:string}> $allowlist The model allowlist for this capability.
+	 * @param string                               $capability text|image|vision (unused — present to match filter signature).
+	 */
+	public function enforce_budget( array $allowlist, string $capability ): array { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
+		unset( $capability );
 		$cap = (float) get_option( 'extend_ai_monthly_user_cap_usd', 0 );
 		if ( $cap <= 0 ) {
-			return $list;
+			return $allowlist;
 		}
 		$spent = $this->repo->spent_in_period( get_current_user_id(), gmdate( 'Y-m' ) );
-		return $spent >= $cap ? [] : $list;
+		return $spent >= $cap ? array() : $allowlist;
 	}
 
 	private function price( string $provider, string $model, int $tokens_in, int $tokens_out ): float {
@@ -64,7 +68,7 @@ final class Cost_Tracker {
 		$default_out = 0.015;
 
 		/** @var float $rate_in  */
-		$rate_in  = (float) apply_filters( 'extend_ai_token_rate_input',  $default_in,  $provider, $model );
+		$rate_in = (float) apply_filters( 'extend_ai_token_rate_input', $default_in, $provider, $model );
 		/** @var float $rate_out */
 		$rate_out = (float) apply_filters( 'extend_ai_token_rate_output', $default_out, $provider, $model );
 

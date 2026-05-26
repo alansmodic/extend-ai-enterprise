@@ -16,7 +16,7 @@ namespace ExtendAI\Enterprise\Governance;
 final class Output_Moderator {
 
 	public function register(): void {
-		add_filter( 'rest_post_dispatch', [ $this, 'moderate' ], 10, 3 );
+		add_filter( 'rest_post_dispatch', array( $this, 'moderate' ), 10, 3 );
 	}
 
 	/**
@@ -44,11 +44,13 @@ final class Output_Moderator {
 		do_action( 'extend_ai_moderation_violation', $violation, $request, $text );
 
 		$response->set_status( 451 );
-		$response->set_data( [
-			'code'    => 'extend_ai_output_blocked',
-			'message' => sprintf( 'AI output blocked: %s', $violation ),
-			'data'    => [ 'status' => 451 ],
-		] );
+		$response->set_data(
+			array(
+				'code'    => 'extend_ai_output_blocked',
+				'message' => sprintf( 'AI output blocked: %s', $violation ),
+				'data'    => array( 'status' => 451 ),
+			)
+		);
 		return $response;
 	}
 
@@ -57,7 +59,7 @@ final class Output_Moderator {
 			return $data;
 		}
 		if ( is_array( $data ) ) {
-			foreach ( [ 'result', 'output', 'text', 'content' ] as $k ) {
+			foreach ( array( 'result', 'output', 'text', 'content' ) as $k ) {
 				if ( isset( $data[ $k ] ) && is_string( $data[ $k ] ) ) {
 					return $data[ $k ];
 				}
@@ -67,7 +69,7 @@ final class Output_Moderator {
 	}
 
 	private function scan( string $text ): ?string {
-		$banned = (array) apply_filters( 'extend_ai_banned_phrases', (array) get_option( 'extend_ai_banned_phrases', [] ) );
+		$banned = (array) apply_filters( 'extend_ai_banned_phrases', (array) get_option( 'extend_ai_banned_phrases', array() ) );
 		foreach ( $banned as $phrase ) {
 			if ( $phrase !== '' && stripos( $text, (string) $phrase ) !== false ) {
 				return 'banned phrase detected';

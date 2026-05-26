@@ -17,9 +17,9 @@ final class Settings_Page {
 	private const SLUG_PROMPTS = 'extend-ai-enterprise-prompts';
 
 	public function register(): void {
-		add_action( 'admin_menu',         [ $this, 'menu' ] );
-		add_action( 'admin_init',         [ $this, 'register_settings' ] );
-		add_action( 'admin_enqueue_scripts', [ $this, 'enqueue' ] );
+		add_action( 'admin_menu', array( $this, 'menu' ) );
+		add_action( 'admin_init', array( $this, 'register_settings' ) );
+		add_action( 'admin_enqueue_scripts', array( $this, 'enqueue' ) );
 	}
 
 	public function menu(): void {
@@ -29,7 +29,7 @@ final class Settings_Page {
 			__( 'AI Enterprise', 'extend-ai-enterprise' ),
 			'manage_options',
 			self::SLUG_MAIN,
-			[ $this, 'render_main' ]
+			array( $this, 'render_main' )
 		);
 		add_submenu_page(
 			'tools.php',
@@ -37,7 +37,7 @@ final class Settings_Page {
 			__( 'AI Prompts', 'extend-ai-enterprise' ),
 			'manage_options',
 			self::SLUG_PROMPTS,
-			[ $this, 'render_prompts' ]
+			array( $this, 'render_prompts' )
 		);
 	}
 
@@ -50,7 +50,7 @@ final class Settings_Page {
 		wp_enqueue_script(
 			'extend-ai-enterprise-admin',
 			$src,
-			[ 'wp-element', 'wp-components', 'wp-api-fetch', 'wp-dom-ready', 'wp-i18n' ],
+			array( 'wp-element', 'wp-components', 'wp-api-fetch', 'wp-dom-ready', 'wp-i18n' ),
 			(string) filemtime( EXTEND_AI_ENTERPRISE_DIR . '/assets/admin.js' ),
 			true
 		);
@@ -58,7 +58,7 @@ final class Settings_Page {
 	}
 
 	public function register_settings(): void {
-		foreach ( [
+		foreach ( array(
 			'extend_ai_policy_preamble',
 			'extend_ai_rate_limits',
 			'extend_ai_monthly_user_cap_usd',
@@ -69,7 +69,7 @@ final class Settings_Page {
 			'extend_ai_redact_pii',
 			'extend_ai_role_map',
 			'extend_ai_vault_enabled',
-		] as $option ) {
+		) as $option ) {
 			register_setting( 'extend_ai_enterprise', $option );
 		}
 	}
@@ -91,9 +91,11 @@ final class Settings_Page {
 					<tr>
 						<th><label for="extend_ai_policy_preamble"><?php esc_html_e( 'Global policy preamble', 'extend-ai-enterprise' ); ?></label></th>
 						<td>
-							<textarea id="extend_ai_policy_preamble" name="extend_ai_policy_preamble" rows="5" class="large-text code"><?php
+							<textarea id="extend_ai_policy_preamble" name="extend_ai_policy_preamble" rows="5" class="large-text code">
+							<?php
 								echo esc_textarea( (string) get_option( 'extend_ai_policy_preamble', '' ) );
-							?></textarea>
+							?>
+							</textarea>
 							<p class="description"><?php esc_html_e( 'Prepended to every AI ability prompt, after any per-ability override.', 'extend-ai-enterprise' ); ?></p>
 						</td>
 					</tr>

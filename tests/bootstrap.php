@@ -16,7 +16,10 @@
 
 declare( strict_types=1 );
 
-$_tests_dir = getenv( 'WP_TESTS_DIR' ) ?: '/tmp/wordpress-tests-lib';
+$_tests_dir = getenv( 'WP_TESTS_DIR' );
+if ( ! is_string( $_tests_dir ) || $_tests_dir === '' ) {
+	$_tests_dir = '/tmp/wordpress-tests-lib';
+}
 if ( ! file_exists( $_tests_dir . '/includes/functions.php' ) ) {
 	fwrite( STDERR, "WordPress test library not found at {$_tests_dir}. Set WP_TESTS_DIR.\n" );
 	exit( 1 );
@@ -24,15 +27,18 @@ if ( ! file_exists( $_tests_dir . '/includes/functions.php' ) ) {
 
 require_once $_tests_dir . '/includes/functions.php';
 
-$_ai_plugin = getenv( 'WP_AI_PLUGIN_FILE' ) ?: null;
+$_ai_plugin = getenv( 'WP_AI_PLUGIN_FILE' );
+if ( ! is_string( $_ai_plugin ) || $_ai_plugin === '' ) {
+	$_ai_plugin = null;
+}
 
 if ( ! $_ai_plugin ) {
 	// Try common locations relative to this checkout.
-	$candidates = [
+	$candidates = array(
 		dirname( __DIR__, 2 ) . '/ai/ai.php',     // sibling plugin directory
 		dirname( __DIR__, 2 ) . '/wp-ai/ai.php',  // CI layout (separate checkout)
 		'/tmp/wordpress/wp-content/plugins/ai/ai.php',
-	];
+	);
 	foreach ( $candidates as $candidate ) {
 		if ( file_exists( $candidate ) ) {
 			$_ai_plugin = $candidate;
@@ -48,27 +54,37 @@ if ( ! $_ai_plugin || ! file_exists( $_ai_plugin ) ) {
 
 $_self_plugin = dirname( __DIR__ ) . '/extend-ai-enterprise.php';
 
-tests_add_filter( 'muplugins_loaded', static function () use ( $_ai_plugin, $_self_plugin ): void {
-	require_once $_ai_plugin;
-	require_once $_self_plugin;
+tests_add_filter(
+	'muplugins_loaded',
+	static function () use ( $_ai_plugin, $_self_plugin ): void {
+		require_once $_ai_plugin;
+		require_once $_self_plugin;
 
-	// The WP test scaffold doesn't fire activation hooks, so install our tables
-	// directly. dbDelta is idempotent.
-	\ExtendAI\Enterprise\Storage\Usage_Repository::install();
-	\ExtendAI\Enterprise\Storage\Prompt_Library::install();
+		// The WP test scaffold doesn't fire activation hooks, so install our tables
+		// directly. dbDelta is idempotent.
+		\ExtendAI\Enterprise\Storage\Usage_Repository::install();
+		\ExtendAI\Enterprise\Storage\Prompt_Library::install();
 
-	// WP AI experiments only register their abilities on `init` if their per-
-	// feature option is truthy — and `init` fires once during bootstrap. Set
-	// the toggles now so the registration sees them.
-	update_option( 'wpai_features_enabled', true );
-	foreach ( [
-		'title-generation', 'excerpt-generation', 'meta-description',
-		'summarization', 'content-classification', 'content-resizing',
-		'comment-moderation', 'alt-text', 'generate-image',
-		'editorial-notes', 'editorial-updates',
-	] as $feature ) {
-		update_option( "wpai_feature_{$feature}_enabled", true );
+		// WP AI experiments only register their abilities on `init` if their per-
+		// feature option is truthy — and `init` fires once during bootstrap. Set
+		// the toggles now so the registration sees them.
+		update_option( 'wpai_features_enabled', true );
+		foreach ( array(
+			'title-generation',
+			'excerpt-generation',
+			'meta-description',
+			'summarization',
+			'content-classification',
+			'content-resizing',
+			'comment-moderation',
+			'alt-text',
+			'generate-image',
+			'editorial-notes',
+			'editorial-updates',
+		) as $feature ) {
+			update_option( "wpai_feature_{$feature}_enabled", true );
+		}
 	}
-} );
+);
 
 require $_tests_dir . '/includes/bootstrap.php';

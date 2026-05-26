@@ -20,7 +20,7 @@ final class Version_Gate {
 	public const TESTED_MAX = '1.0.99';
 
 	public function register(): void {
-		add_action( 'admin_notices', [ $this, 'maybe_notice' ] );
+		add_action( 'admin_notices', array( $this, 'maybe_notice' ) );
 	}
 
 	public function maybe_notice(): void {
@@ -40,11 +40,16 @@ final class Version_Gate {
 		printf(
 			'<div class="notice notice-warning"><p><strong>%s</strong> %s</p></div>',
 			esc_html__( 'Extend AI — Enterprise:', 'extend-ai-enterprise' ),
-			esc_html( sprintf(
+			esc_html(
+				sprintf(
 				/* translators: 1: running WP AI version, 2: direction, 3-4: tested range */
-				__( 'The active WordPress AI plugin (v%1$s) is %2$s than the range this governance layer was tested against (v%3$s–v%4$s). Governance hooks may behave unexpectedly. Verify filter and REST contracts before relying on enforcement.', 'extend-ai-enterprise' ),
-				$current, $direction, self::TESTED_MIN, self::TESTED_MAX
-			) )
+					__( 'The active WordPress AI plugin (v%1$s) is %2$s than the range this governance layer was tested against (v%3$s–v%4$s). Governance hooks may behave unexpectedly. Verify filter and REST contracts before relying on enforcement.', 'extend-ai-enterprise' ),
+					$current,
+					$direction,
+					self::TESTED_MIN,
+					self::TESTED_MAX
+				)
+			)
 		);
 	}
 }

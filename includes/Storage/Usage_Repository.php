@@ -66,8 +66,9 @@ final class Usage_Repository {
 		$table = self::table();
 		$now   = current_time( 'mysql', true );
 
-		$wpdb->query( $wpdb->prepare(
-			"INSERT INTO {$table}
+		$wpdb->query(
+			$wpdb->prepare(
+				"INSERT INTO {$table}
 				(user_id, period, provider, model, requests, tokens_in, tokens_out, usd_spent, updated_at)
 			 VALUES (%d, %s, %s, %s, 1, %d, %d, %f, %s)
 			 ON DUPLICATE KEY UPDATE
@@ -76,17 +77,28 @@ final class Usage_Repository {
 				tokens_out = tokens_out + VALUES(tokens_out),
 				usd_spent  = usd_spent + VALUES(usd_spent),
 				updated_at = VALUES(updated_at)",
-			$user_id, $period, $provider, $model, $tokens_in, $tokens_out, $usd, $now
-		) );
+				$user_id,
+				$period,
+				$provider,
+				$model,
+				$tokens_in,
+				$tokens_out,
+				$usd,
+				$now
+			)
+		);
 	}
 
 	public function spent_in_period( int $user_id, string $period ): float {
 		global $wpdb;
 		$table = self::table();
-		return (float) $wpdb->get_var( $wpdb->prepare(
-			"SELECT COALESCE(SUM(usd_spent), 0) FROM {$table} WHERE user_id = %d AND period = %s",
-			$user_id, $period
-		) );
+		return (float) $wpdb->get_var(
+			$wpdb->prepare(
+				"SELECT COALESCE(SUM(usd_spent), 0) FROM {$table} WHERE user_id = %d AND period = %s",
+				$user_id,
+				$period
+			)
+		);
 	}
 
 	/**
@@ -95,8 +107,9 @@ final class Usage_Repository {
 	public function by_user_for_period( string $period ): array {
 		global $wpdb;
 		$table = self::table();
-		$rows  = (array) $wpdb->get_results( $wpdb->prepare(
-			"SELECT user_id,
+		$rows  = (array) $wpdb->get_results(
+			$wpdb->prepare(
+				"SELECT user_id,
 			        SUM(requests)   AS requests,
 			        SUM(tokens_in)  AS tokens_in,
 			        SUM(tokens_out) AS tokens_out,
@@ -105,24 +118,31 @@ final class Usage_Repository {
 			  WHERE period = %s
 			  GROUP BY user_id
 			  ORDER BY usd_spent DESC",
-			$period
-		), ARRAY_A );
+				$period
+			),
+			ARRAY_A
+		);
 
-		return array_map( static fn( $r ) => [
-			'user_id'    => (int)   $r['user_id'],
-			'requests'   => (int)   $r['requests'],
-			'tokens_in'  => (int)   $r['tokens_in'],
-			'tokens_out' => (int)   $r['tokens_out'],
-			'usd_spent'  => (float) $r['usd_spent'],
-		], $rows );
+		return array_map(
+			static fn( $r ) => array(
+				'user_id'    => (int) $r['user_id'],
+				'requests'   => (int) $r['requests'],
+				'tokens_in'  => (int) $r['tokens_in'],
+				'tokens_out' => (int) $r['tokens_out'],
+				'usd_spent'  => (float) $r['usd_spent'],
+			),
+			$rows
+		);
 	}
 
 	public function purge_older_than( string $cutoff_period ): int {
 		global $wpdb;
 		$table = self::table();
-		return (int) $wpdb->query( $wpdb->prepare(
-			"DELETE FROM {$table} WHERE period < %s",
-			$cutoff_period
-		) );
+		return (int) $wpdb->query(
+			$wpdb->prepare(
+				"DELETE FROM {$table} WHERE period < %s",
+				$cutoff_period
+			)
+		);
 	}
 }

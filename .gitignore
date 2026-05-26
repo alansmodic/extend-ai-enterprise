@@ -1,4 +1,5 @@
 vendor/
+phpcs-report.xml
 node_modules/
 composer.lock
 package-lock.json

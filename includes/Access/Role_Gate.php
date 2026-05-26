@@ -16,19 +16,19 @@ namespace ExtendAI\Enterprise\Access;
 final class Role_Gate {
 
 	/** @var array<string,string[]> ability_id => allowed role slugs */
-	private const DEFAULT_MAP = [
-		'ai/comment-moderation' => [ 'administrator', 'editor' ],
-		'ai/generate-image'     => [ 'administrator', 'editor' ],
+	private const DEFAULT_MAP = array(
+		'ai/comment-moderation' => array( 'administrator', 'editor' ),
+		'ai/generate-image'     => array( 'administrator', 'editor' ),
 		// All other abilities default to "any user with publish_posts" (WP AI plugin default).
-	];
+	);
 
 	public function register(): void {
-		add_action( 'init', [ $this, 'attach_feature_filters' ], 5 );
-		add_filter( 'user_has_cap', [ $this, 'gate_ability_caps' ], 10, 4 );
+		add_action( 'init', array( $this, 'attach_feature_filters' ), 5 );
+		add_filter( 'user_has_cap', array( $this, 'gate_ability_caps' ), 10, 4 );
 	}
 
 	public function attach_feature_filters(): void {
-		$disabled = (array) get_option( 'extend_ai_disabled_features', [] );
+		$disabled = (array) get_option( 'extend_ai_disabled_features', array() );
 		foreach ( $disabled as $feature_id ) {
 			$hook = 'wpai_feature_' . sanitize_key( (string) $feature_id ) . '_enabled';
 			add_filter( $hook, '__return_false', 100 );

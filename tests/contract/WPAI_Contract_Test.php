@@ -45,18 +45,18 @@ final class WPAI_Contract_Test extends WP_UnitTestCase {
 			return $instruction;
 		};
 		add_filter( 'wpai_system_instruction', $listener, 99, 3 );
-		apply_filters( 'wpai_system_instruction', 'default', 'ai/title-generation', [ 'post_id' => 1 ] );
+		apply_filters( 'wpai_system_instruction', 'default', 'ai/title-generation', array( 'post_id' => 1 ) );
 		remove_filter( 'wpai_system_instruction', $listener, 99 );
 
 		$this->assertIsArray( $captured, 'wpai_system_instruction did not fire.' );
 		$this->assertSame( 'default', $captured['instruction'] );
 		$this->assertSame( 'ai/title-generation', $captured['ability_name'] );
-		$this->assertSame( [ 'post_id' => 1 ], $captured['data'] );
+		$this->assertSame( array( 'post_id' => 1 ), $captured['data'] );
 	}
 
 	/** Content normalization filters must exist with single-string arg. */
 	public function test_normalize_content_filter_exists(): void {
-		$saw = false;
+		$saw      = false;
 		$listener = static function ( string $content ) use ( &$saw ): string {
 			$saw = true;
 			return $content;
@@ -69,14 +69,14 @@ final class WPAI_Contract_Test extends WP_UnitTestCase {
 
 	/** Model preference filters must exist for all three capabilities. */
 	public function test_model_preference_filters_exist(): void {
-		foreach ( [ 'wpai_preferred_text_models', 'wpai_preferred_image_models', 'wpai_preferred_vision_models' ] as $hook ) {
-			$fired = false;
+		foreach ( array( 'wpai_preferred_text_models', 'wpai_preferred_image_models', 'wpai_preferred_vision_models' ) as $hook ) {
+			$fired    = false;
 			$listener = static function ( $models ) use ( &$fired ) {
 				$fired = true;
 				return $models;
 			};
 			add_filter( $hook, $listener, 99 );
-			apply_filters( $hook, [] );
+			apply_filters( $hook, array() );
 			remove_filter( $hook, $listener, 99 );
 			$this->assertTrue( $fired, "{$hook} missing — model allowlist enforcement is inactive." );
 		}
