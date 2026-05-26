@@ -1,0 +1,62 @@
+name: Contract tests
+
+on:
+  pull_request:
+  push:
+    branches: [ main ]
+  schedule:
+    # 06:00 UTC daily — drift detector against WP AI trunk.
+    - cron: '0 6 * * *'
+
+jobs:
+  contract:
+    name: WP AI ${{ matrix.wpai_ref }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        wpai_ref: [ '1.0.0', 'develop' ]
+    services:
+      mysql:
+        image: mariadb:10.11
+        env:
+          MYSQL_ROOT_PASSWORD: root
+        ports: [ '3306:3306' ]
+        options: >-
+          --health-cmd="mysqladmin ping --silent"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: extend-ai
+
+      - name: Check out WordPress AI plugin (${{ matrix.wpai_ref }})
+        uses: actions/checkout@v4
+        with:
+          repository: WordPress/ai
+          ref: ${{ matrix.wpai_ref }}
+          path: wp-ai
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.1'
+          tools: composer
+          coverage: none
+
+      - name: Install WP test scaffold
+        run: |
+          bash extend-ai/bin/install-wp-tests.sh wordpress_test root root 127.0.0.1 latest
+          cp -R wp-ai /tmp/wordpress/wp-content/plugins/ai
+          cp -R extend-ai /tmp/wordpress/wp-content/plugins/extend-ai
+
+      - name: Composer install
+        working-directory: extend-ai
+        run: composer install --no-interaction
+
+      - name: Run contract suite
+        working-directory: extend-ai
+        env:
+          WP_TESTS_DIR: /tmp/wordpress-tests-lib
+        run: composer test:contract
