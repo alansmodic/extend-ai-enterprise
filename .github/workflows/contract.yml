@@ -45,6 +45,9 @@ jobs:
           tools: composer
           coverage: none
 
+      - name: Install Subversion (needed by WP test scaffold installer)
+        run: sudo apt-get update && sudo apt-get install -y subversion
+
       - name: Install WP test scaffold
         run: |
           bash extend-ai/bin/install-wp-tests.sh wordpress_test root root 127.0.0.1 latest
