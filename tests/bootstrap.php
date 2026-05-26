@@ -51,6 +51,24 @@ $_self_plugin = dirname( __DIR__ ) . '/extend-ai-enterprise.php';
 tests_add_filter( 'muplugins_loaded', static function () use ( $_ai_plugin, $_self_plugin ): void {
 	require_once $_ai_plugin;
 	require_once $_self_plugin;
+
+	// The WP test scaffold doesn't fire activation hooks, so install our tables
+	// directly. dbDelta is idempotent.
+	\ExtendAI\Enterprise\Storage\Usage_Repository::install();
+	\ExtendAI\Enterprise\Storage\Prompt_Library::install();
+
+	// WP AI experiments only register their abilities on `init` if their per-
+	// feature option is truthy — and `init` fires once during bootstrap. Set
+	// the toggles now so the registration sees them.
+	update_option( 'wpai_features_enabled', true );
+	foreach ( [
+		'title-generation', 'excerpt-generation', 'meta-description',
+		'summarization', 'content-classification', 'content-resizing',
+		'comment-moderation', 'alt-text', 'generate-image',
+		'editorial-notes', 'editorial-updates',
+	] as $feature ) {
+		update_option( "wpai_feature_{$feature}_enabled", true );
+	}
 } );
 
 require $_tests_dir . '/includes/bootstrap.php';

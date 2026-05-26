@@ -112,12 +112,8 @@ final class WPAI_Contract_Test extends WP_UnitTestCase {
 	public function test_abilities_api_present(): void {
 		$this->assertTrue( function_exists( 'wp_get_abilities' ), 'Abilities API missing — UI cannot discover prompts.' );
 
-		// At least one ai/* ability is registered once the WP AI plugin loads with experiments enabled.
-		update_option( 'wpai_features_enabled', true );
-		update_option( 'wpai_feature_title-generation_enabled', true );
-
-		do_action( 'init' );
-
+		// Feature toggles are enabled in tests/bootstrap.php so WP AI's init
+		// registers its abilities during the test scaffold's WP boot.
 		$found = false;
 		foreach ( (array) wp_get_abilities() as $ability ) {
 			$name = method_exists( $ability, 'get_name' ) ? (string) $ability->get_name() : '';
