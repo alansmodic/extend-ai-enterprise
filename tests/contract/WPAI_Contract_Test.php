@@ -108,21 +108,38 @@ final class WPAI_Contract_Test extends WP_UnitTestCase {
 		$this->assertTrue( method_exists( $registry, 'setHttpTransporter' ), 'Registry lost setHttpTransporter() — we cannot wrap.' );
 	}
 
-	/** Abilities API must expose wp_get_abilities() and ai/* namespace. */
+	/** Abilities API must expose wp_get_abilities(). */
 	public function test_abilities_api_present(): void {
 		$this->assertTrue( function_exists( 'wp_get_abilities' ), 'Abilities API missing — UI cannot discover prompts.' );
+		$this->assertTrue( function_exists( 'wp_register_ability' ), 'wp_register_ability missing — WP AI experiments cannot register.' );
+	}
 
-		// Feature toggles are enabled in tests/bootstrap.php so WP AI's init
-		// registers its abilities during the test scaffold's WP boot.
-		$found = false;
+	/**
+	 * WP AI must subscribe to wp_abilities_api_init so its abilities register.
+	 * We fire the action ourselves and look for ai/* registrations afterwards.
+	 * This is more robust than relying on the test scaffold's request lifecycle
+	 * to have fired it for us.
+	 */
+	public function test_wp_ai_registers_abilities(): void {
+		$this->assertNotFalse(
+			has_action( 'wp_abilities_api_init' ),
+			'No callbacks on wp_abilities_api_init — WP AI experiments will never register abilities.'
+		);
+
+		do_action( 'wp_abilities_api_init' );
+
+		$ai_namespace_count = 0;
 		foreach ( (array) wp_get_abilities() as $ability ) {
 			$name = method_exists( $ability, 'get_name' ) ? (string) $ability->get_name() : '';
 			if ( str_starts_with( $name, 'ai/' ) ) {
-				$found = true;
-				break;
+				$ai_namespace_count++;
 			}
 		}
-		$this->assertTrue( $found, 'No ai/* abilities registered — UI prompt discovery will be empty.' );
+		$this->assertGreaterThan(
+			0,
+			$ai_namespace_count,
+			'wp_abilities_api_init fired but no ai/* abilities registered — namespace contract broken.'
+		);
 	}
 
 	/** Abilities REST namespace must still be wp-abilities/v1 (rate limiter / moderator depend on it). */
