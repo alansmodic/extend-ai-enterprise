@@ -69,6 +69,7 @@ final class Settings_Page {
 			'extend_ai_redact_pii',
 			'extend_ai_role_map',
 			'extend_ai_vault_enabled',
+			'extend_ai_use_guidelines',
 		) as $option ) {
 			register_setting( 'extend_ai_enterprise', $option );
 		}
@@ -110,6 +111,20 @@ final class Settings_Page {
 					<tr>
 						<th><label for="extend_ai_redact_pii"><?php esc_html_e( 'Redact PII in inputs', 'extend-ai-enterprise' ); ?></label></th>
 						<td><input type="checkbox" id="extend_ai_redact_pii" name="extend_ai_redact_pii" value="1" <?php checked( (bool) get_option( 'extend_ai_redact_pii', true ) ); ?> /></td>
+					</tr>
+					<tr>
+						<th><label for="extend_ai_use_guidelines"><?php esc_html_e( 'Use site Guidelines', 'extend-ai-enterprise' ); ?></label></th>
+						<td>
+							<input type="checkbox" id="extend_ai_use_guidelines" name="extend_ai_use_guidelines" value="1" <?php checked( (bool) get_option( 'extend_ai_use_guidelines', true ) ); ?> />
+							<p class="description">
+								<?php esc_html_e( 'When the Gutenberg "Guidelines" experiment is active, append the site\'s guidelines to editorial review prompts (Editorial notes, Editorial updates) and expose {guidelines} variables to prompt templates.', 'extend-ai-enterprise' ); ?>
+								<?php if ( ( new \ExtendAI\Enterprise\Policy\Guidelines_Bridge() )->is_available() ) : ?>
+									<strong><?php esc_html_e( 'Status: Guidelines detected on this site.', 'extend-ai-enterprise' ); ?></strong>
+								<?php else : ?>
+									<em><?php esc_html_e( 'Status: Guidelines not detected — enable the experiment under Gutenberg → Experiments (Gutenberg 22.7+).', 'extend-ai-enterprise' ); ?></em>
+								<?php endif; ?>
+							</p>
+						</td>
 					</tr>
 				</table>
 				<?php submit_button(); ?>

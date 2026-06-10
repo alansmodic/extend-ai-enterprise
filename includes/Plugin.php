@@ -18,6 +18,7 @@ use ExtendAI\Enterprise\Governance\Output_Moderator;
 use ExtendAI\Enterprise\Governance\Rate_Limiter;
 use ExtendAI\Enterprise\Governance\Retention;
 use ExtendAI\Enterprise\Logging\Transporter_Wrap;
+use ExtendAI\Enterprise\Policy\Guidelines_Bridge;
 use ExtendAI\Enterprise\Policy\Model_Allowlist;
 use ExtendAI\Enterprise\Policy\PII_Redactor;
 use ExtendAI\Enterprise\Policy\Prompt_Injector;
@@ -39,7 +40,9 @@ final class Plugin {
 		( new Transporter_Wrap() )->register();
 
 		// Policy layer — shapes inputs before they reach the model.
-		( new Prompt_Injector() )->register();
+		$guidelines = new Guidelines_Bridge();
+		$guidelines->register();
+		( new Prompt_Injector( null, $guidelines ) )->register();
 		( new Model_Allowlist() )->register();
 		( new PII_Redactor() )->register();
 

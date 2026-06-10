@@ -187,7 +187,7 @@
 						value:    template,
 						onChange: setTemplate,
 						rows:     12,
-						help:     'Supports {variable} placeholders. Available: {ability}, {user_login}, {user_role}, {site_name}, {site_url}, {current_date}, {post_title}, {post_type}, {post_status} (when applicable), plus any scalar passed by the ability.',
+						help:     'Supports {variable} placeholders. Available: {ability}, {user_login}, {user_role}, {site_name}, {site_url}, {current_date}, {post_title}, {post_type}, {post_status} (when applicable), plus any scalar passed by the ability. When the Gutenberg Guidelines experiment is active: {guidelines} (full composed section), {guidelines_site}, {guidelines_copy}, {guidelines_images}, {guidelines_additional}, {guidelines_blocks}. Using any {guidelines*} variable disables the automatic append for editorial abilities.',
 					} ),
 					h( 'div', { style: { display: 'flex', gap: '8px' } },
 						h( Button, {

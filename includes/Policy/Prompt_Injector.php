@@ -6,6 +6,9 @@
  * Resolution order, applied in sequence on top of the WP AI default:
  *   1. Global policy preamble (option `extend_ai_policy_preamble`) — prepended.
  *   2. Per-ability override (table `wp_extend_ai_prompts`) — prepend/append/replace.
+ *   3. Site Guidelines (Gutenberg experiment, via Guidelines_Bridge) — appended
+ *      to editorial-review abilities, unless the override template already
+ *      placed them via a `{guidelines*}` variable.
  *
  * Templates support `{var}` interpolation from the filter's `$data` payload plus
  * a handful of built-in variables (user_login, site_name, current_date).
@@ -21,8 +24,15 @@ use ExtendAI\Enterprise\Storage\Prompt_Library;
 
 final class Prompt_Injector {
 
-	public function __construct( private ?Prompt_Library $library = null ) {
-		$this->library ??= new Prompt_Library();
+	/** Abilities that receive the site-guidelines section by default. */
+	private const GUIDELINES_ABILITIES = array( 'ai/editorial-notes', 'ai/editorial-updates' );
+
+	public function __construct(
+		private ?Prompt_Library $library = null,
+		private ?Guidelines_Bridge $guidelines = null
+	) {
+		$this->library    ??= new Prompt_Library();
+		$this->guidelines ??= new Guidelines_Bridge();
 	}
 
 	public function register(): void {
@@ -37,6 +47,7 @@ final class Prompt_Injector {
 	public function inject( string $instruction, string $ability_name, array $data ): string {
 		$result = $this->apply_override( $instruction, $ability_name, $data );
 		$result = $this->apply_global_preamble( $result, $ability_name );
+		$result = $this->apply_guidelines( $result, $ability_name, $data );
 		return $result;
 	}
 
@@ -59,6 +70,62 @@ final class Prompt_Injector {
 		$default  = (string) get_option( 'extend_ai_policy_preamble', '' );
 		$preamble = (string) apply_filters( 'extend_ai_policy_preamble', $default, $ability_name );
 		return $preamble === '' ? $instruction : $preamble . "\n\n" . $instruction;
+	}
+
+	/**
+	 * Append the site-guidelines section (Gutenberg Guidelines experiment) for
+	 * editorial-review abilities. No-ops when the experiment is absent, the
+	 * toggle is off, or the guidelines are empty. When the ability's override
+	 * template already consumed a `{guidelines*}` variable, the section is in
+	 * the prompt already — only the audit action fires.
+	 *
+	 * @param array<string,mixed> $data
+	 */
+	private function apply_guidelines( string $instruction, string $ability_name, array $data ): string {
+		/**
+		 * Filter which abilities automatically receive the site-guidelines section.
+		 *
+		 * @param string[] $abilities
+		 * @param string   $ability_name The ability currently being prompted.
+		 */
+		$abilities = (array) apply_filters( 'extend_ai_guidelines_abilities', self::GUIDELINES_ABILITIES, $ability_name );
+
+		$override      = $this->library->get( $ability_name );
+		$used_variable = $override && str_contains( (string) $override['template'], '{guidelines' );
+
+		if ( ! $used_variable && ! in_array( $ability_name, $abilities, true ) ) {
+			return $instruction;
+		}
+
+		$section = $this->guidelines->compose( $data );
+		if ( $section === '' ) {
+			return $instruction;
+		}
+
+		$reference = $this->guidelines->reference();
+
+		/**
+		 * Fires when site Guidelines were injected into an ability's prompt.
+		 *
+		 * Lets audit infrastructure record which version of the site's standards
+		 * a given AI response was based on.
+		 *
+		 * @param string $ability_name
+		 * @param int    $guideline_post_id
+		 * @param int    $guideline_revision_id Latest revision, 0 if none exist.
+		 */
+		do_action(
+			'extend_ai_guidelines_applied',
+			$ability_name,
+			(int) ( $reference['post_id'] ?? 0 ),
+			(int) ( $reference['revision_id'] ?? 0 )
+		);
+
+		if ( $used_variable ) {
+			return $instruction;
+		}
+
+		return rtrim( $instruction ) . "\n\n" . $section;
 	}
 
 	/** @param array<string,mixed> $data */

@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Site Guidelines integration** (Gutenberg "Guidelines" experiment, 22.7+).
+  When the experiment is active, the published content-guidelines singleton is
+  composed into a "Site guidelines" prompt section and appended to editorial
+  review abilities (`ai/editorial-notes`, `ai/editorial-updates`), so
+  AI-generated review notes reflect the site's actual standards. Per-block
+  rules are narrowed to block types present in the post under review. Sites
+  without the experiment are untouched — detection is a runtime
+  `post_type_exists()` check covering both the current (`wp_guideline`) and
+  the 22.7 (`wp_content_guideline`) post type names.
+- New prompt-template variables: `{guidelines}`, `{guidelines_site}`,
+  `{guidelines_copy}`, `{guidelines_images}`, `{guidelines_additional}`,
+  `{guidelines_blocks}`. Using any of them in an override template suppresses
+  the automatic append.
+- New filters: `extend_ai_guidelines_enabled`, `extend_ai_guidelines_abilities`,
+  `extend_ai_guidelines_statuses`, `extend_ai_guidelines_text`. New action
+  `extend_ai_guidelines_applied` (ability, guideline post ID, latest revision
+  ID) for audit trails.
+- "Use site Guidelines" toggle (option `extend_ai_use_guidelines`, default on)
+  on the Tools → AI Enterprise page and in the `/policies` REST endpoint,
+  which also reports read-only `guidelines_detected`.
+
 ## [0.1.0] — 2026-05-25
 
 Initial release. Governance, policy, and audit layer for the
