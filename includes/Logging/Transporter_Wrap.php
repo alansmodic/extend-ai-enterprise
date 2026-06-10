@@ -18,6 +18,17 @@
  *
  * Both decorators see every request; only ours emits the action.
  *
+ * Timing: the SDK creates its default transporter lazily — only when a provider
+ * is registered, which WP AI drives from its connectors flow. On a site with no
+ * connector configured yet, the registry holds no transporter at `wp_loaded`
+ * and `getHttpTransporter()` throws. (Upstream's logging wrap hits the same
+ * race and silently skips.) When we find the registry empty, we create the same
+ * default the SDK would (`HttpTransporterFactory::createTransporter()`) and
+ * decorate that; providers registered later adopt the already-set transporter,
+ * so the wrap holds regardless of connector timing. In that scenario upstream's
+ * logging wrap may run after ours on `admin_init:1` and decorate *ours* — the
+ * chain order inverts, but both decorators still see every request.
+ *
  * @package ExtendAI\Enterprise
  */
 
@@ -29,6 +40,8 @@ final class Transporter_Wrap {
 
 	public const FAILURE_TRANSIENT = 'extend_ai_transporter_wrap_failure';
 
+	private bool $wrapped = false;
+
 	public function register(): void {
 		add_action( 'wp_loaded', array( $this, 'wrap' ), 20 );
 		add_action( 'admin_init', array( $this, 'wrap' ), 20 );
@@ -36,8 +49,7 @@ final class Transporter_Wrap {
 	}
 
 	public function wrap(): void {
-		static $wrapped = false;
-		if ( $wrapped ) {
+		if ( $this->wrapped ) {
 			return;
 		}
 
@@ -50,9 +62,19 @@ final class Transporter_Wrap {
 		} else {
 			try {
 				$registry = \WordPress\AiClient\AiClient::defaultRegistry();
-				$inner    = $registry->getHttpTransporter();
+
+				try {
+					$inner = $registry->getHttpTransporter();
+				} catch ( \Throwable $e ) {
+					// No transporter yet — the SDK only creates its default when a
+					// provider registers, which hasn't happened on this request
+					// (e.g. no connector configured yet). Create the same default
+					// the SDK would; later provider registrations adopt it.
+					$inner = self::default_transporter();
+				}
+
 				$registry->setHttpTransporter( self::decorator( $inner ) );
-				$wrapped = true;
+				$this->wrapped = true;
 			} catch ( \Throwable $e ) {
 				$reason = '' !== $e->getMessage() ? $e->getMessage() : 'unknown exception';
 			}
@@ -65,6 +87,20 @@ final class Transporter_Wrap {
 
 		// Wrap succeeded — clear any prior failure flag.
 		delete_transient( self::FAILURE_TRANSIENT );
+	}
+
+	/**
+	 * Create the SDK's default transporter, exactly as ProviderRegistry does
+	 * internally when the first provider registers.
+	 *
+	 * @throws \RuntimeException When the factory is unavailable (SDK drift) or
+	 *                           cannot discover an HTTP client implementation.
+	 */
+	private static function default_transporter(): object {
+		if ( ! class_exists( '\\WordPress\\AiClient\\Providers\\Http\\HttpTransporterFactory' ) ) {
+			throw new \RuntimeException( 'SDK transporter not initialized and HttpTransporterFactory is unavailable' );
+		}
+		return \WordPress\AiClient\Providers\Http\HttpTransporterFactory::createTransporter();
 	}
 
 	private static function record_failure( string $reason ): void {

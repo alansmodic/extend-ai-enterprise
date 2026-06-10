@@ -30,6 +30,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   on the Tools → AI Enterprise page and in the `/policies` REST endpoint,
   which also reports read-only `guidelines_detected`.
 
+### Fixed
+
+- **Transporter wrap no longer fails on sites without a configured AI
+  connector.** The AI Client SDK creates its default HTTP transporter lazily —
+  only when a provider registers — so on a fresh site (no connector yet) the
+  registry was empty at `wp_loaded` and the wrap recorded a failure ("
+  `HttpTransporterInterface instance not set`"), leaving cost tracking
+  inactive. The wrap now creates the same default the SDK would
+  (`HttpTransporterFactory::createTransporter()`) and decorates it; providers
+  registered later adopt it. New contract tests pin the SDK's lazy-init
+  behavior and the factory fallback.
+
 ## [0.1.0] — 2026-05-25
 
 Initial release. Governance, policy, and audit layer for the
