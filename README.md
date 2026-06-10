@@ -17,12 +17,78 @@ plugin and we keep running.
 
 ---
 
+## 🚀 Try it in WordPress Playground
+
+Spin up the **entire stack in your browser** — WordPress, the AI plugin, the
+Gutenberg Guidelines experiment, and this plugin — with one click. No install,
+no server, nothing to clean up:
+
+**[▶ Launch the demo in WordPress Playground](https://playground.wordpress.net/?blueprint-url=https://raw.githubusercontent.com/alansmodic/extend-ai-enterprise/main/blueprint.json)**
+
+The [blueprint](blueprint.json) preloads everything you need:
+
+- **Gutenberg** (latest) with the **Guidelines experiment enabled**
+- The **WordPress AI plugin** with the Editorial Notes / Editorial Updates
+  experiments switched on
+- **This plugin**, built from the `main` branch of this repo
+- **Sample site guidelines** (a fictional coffee roaster: tone, vocabulary,
+  per-block rules) already published under **Settings → Guidelines**
+- A **draft post that deliberately violates those guidelines** (superlatives,
+  jargon, a four-line run-on paragraph) so review notes have something to flag
+- A Playground-only **Tools → AI Prompt Preview** page that renders the final
+  system prompt — so you can see the integration working **without any AI
+  provider key**
+
+### Walkthrough: what to test once it loads
+
+You land on **Tools → AI Enterprise**. From there:
+
+1. **Confirm detection.** The "Use site Guidelines" setting should read
+   *"Status: Guidelines detected on this site."* That's the runtime
+   `post_type_exists()` check — on a site without the Gutenberg experiment,
+   the same screen tells you the feature is absent and the plugin no-ops.
+
+2. **See the prompt injection — no API key needed.** Open **Tools → AI Prompt
+   Preview**. You'll see the exact system instruction `ai/editorial-notes`
+   receives, ending with a `## Site guidelines` section built from the seeded
+   guidelines. Note that only the `core/paragraph` block rule appears — the
+   draft post contains no image blocks, so the `core/image` rule is filtered
+   out (block rules are scoped to blocks actually present in the post under
+   review).
+
+3. **Change the guidelines, watch the prompt follow.** Go to **Settings →
+   Guidelines**, edit the Copy section (e.g. add *"Never use exclamation
+   marks"*), save, then reload **Tools → AI Prompt Preview**. The new rule is
+   in the prompt.
+
+4. **Run the real thing (needs a provider key).** Go to **Settings →
+   Connectors** and add an API key for OpenAI, Anthropic, or Google. Then open
+   **Posts → "Why Our New Single-Origin Is The Best Coffee Ever"** in the
+   editor and run **Editorial Notes**. The generated notes should flag the
+   superlatives, the jargon, and the over-long paragraph — citing the site's
+   own standards rather than generic style advice.
+
+5. **Exercise the governance controls.**
+   - **Tools → AI Enterprise** → untick *Use site Guidelines* → the preview
+     page loses the `## Site guidelines` section.
+   - **Tools → AI Prompts** → override `ai/editorial-notes` with a template
+     containing `{guidelines_copy}` → the copy guidelines now appear exactly
+     where you placed them, and the automatic append is suppressed (check the
+     preview page again — the text appears once, not twice).
+
+> Playground sites are ephemeral — refresh the tab and everything resets to
+> the blueprint state. Perfect for demos, useless for storing your API key
+> long-term.
+
+---
+
 ## What it adds
 
 | Concern                         | Capability                                                                                          |
 | ------------------------------- | --------------------------------------------------------------------------------------------------- |
 | **Per-ability prompt control**  | Override any of the 11+ built-in ability prompts. Prepend, append, or replace. Variable interpolation. Version history per edit. |
 | **Site-wide policy preamble**   | Inject brand voice / compliance language ahead of every AI call.                                    |
+| **Site Guidelines integration** | When the Gutenberg "Guidelines" experiment is active, review notes are generated against the site's own published standards. Auto-detected; silent no-op everywhere else. |
 | **Model allowlist**             | Restrict the AI plugin to an approved set of provider/model pairs for text, image, and vision.      |
 | **PII redaction**               | Pattern-based redaction of email, SSN, phone numbers from inputs before they leave WordPress.       |
 | **Role-based access**           | Per-ability allowlist of WP roles. Disable specific experiments per-role or globally.               |
@@ -70,6 +136,65 @@ Two custom tables back the moving parts:
 - `wp_extend_ai_prompts` — one row per ability override (mode + template).
 - `wp_extend_ai_prompts_history` — append-only audit of every prompt edit.
 - `wp_extend_ai_usage` — per-user-per-month spend rollups, indexed for fast aggregation.
+
+---
+
+## Site Guidelines integration
+
+[Guidelines](https://make.wordpress.org/ai/2026/03/23/guidelines-lands-in-gutenberg-22-7/)
+is a Gutenberg experiment (22.7+) giving site owners one place to define
+content standards: site context, copy/voice, image rules, and per-block rules.
+When it's active, this plugin feeds those standards into the prompt pipeline so
+**AI review notes reflect the site's actual editorial standards**, not generic
+style advice.
+
+### How it behaves
+
+- **Detection is automatic.** `Policy\Guidelines_Bridge` checks
+  `post_type_exists()` at call time — covering both the current
+  (`wp_guideline`) and the original 22.7 (`wp_content_guideline`) post type
+  names. No Gutenberg, or experiment off → every code path is a silent no-op.
+- **Editorial abilities get the section appended.** For `ai/editorial-notes`
+  and `ai/editorial-updates` (filterable), a delimited `## Site guidelines`
+  section is appended after the per-ability override and policy preamble.
+  Empty categories are omitted.
+- **Block rules are scoped.** When the ability passes a `post_id`, per-block
+  rules are narrowed to block types actually present in that post's content.
+- **Templates can place guidelines explicitly.** Prompt overrides may use
+  `{guidelines}`, `{guidelines_site}`, `{guidelines_copy}`,
+  `{guidelines_images}`, `{guidelines_additional}`, or `{guidelines_blocks}`.
+  Using any of them suppresses the automatic append, so the text never
+  appears twice.
+- **Audit trail.** Every injection fires `extend_ai_guidelines_applied` with
+  the guideline post ID and its latest revision ID — record it to answer
+  *"which version of our standards was this review based on?"*
+
+### Setting it up on a real site
+
+1. Install the [Gutenberg plugin](https://wordpress.org/plugins/gutenberg/)
+   (22.7 or later) and enable the experiment under **Gutenberg → Experiments →
+   "Guidelines"**.
+2. Define your standards under **Settings → Guidelines** and save.
+3. On **Tools → AI Enterprise**, confirm the *Use site Guidelines* setting
+   reads *"Guidelines detected on this site"* (it's on by default).
+4. Run **Editorial Notes** on any post — the generated feedback now evaluates
+   content against your guidelines and cites them when flagging issues.
+
+> **Note:** newer versions of the WP AI plugin are growing their own native
+> Guidelines awareness. If your WP AI version already folds guidelines into
+> its default prompts, untick *Use site Guidelines* (or return `false` from
+> the `extend_ai_guidelines_enabled` filter) to avoid sending the standards
+> twice.
+
+### Knobs
+
+| Hook | Type | Purpose |
+| ---- | ---- | ------- |
+| `extend_ai_guidelines_enabled`   | filter | Kill switch on top of the admin toggle |
+| `extend_ai_guidelines_abilities` | filter | Which abilities get the auto-append (default: the two editorial ones) |
+| `extend_ai_guidelines_statuses`  | filter | Guideline post statuses considered live (default `publish` + `draft`, mirroring Gutenberg) |
+| `extend_ai_guidelines_text`      | filter | Rewrite the composed section before injection |
+| `extend_ai_guidelines_applied`   | action | `(ability, guideline_post_id, revision_id)` after each injection |
 
 ---
 
@@ -132,6 +257,9 @@ declaratively. The most useful:
 | `extend_ai_token_rate_output`           | `float`                                       | $/1k output tokens                         |
 | `extend_ai_banned_phrases`              | `string[]`                                    | Output moderation phrase list              |
 | `extend_ai_prompt_variables`            | `array<string,scalar>`                        | Variables for prompt interpolation         |
+| `extend_ai_guidelines_enabled`          | `bool`                                        | Allow site-Guidelines injection            |
+| `extend_ai_guidelines_abilities`        | `string[]`                                    | Abilities that auto-receive guidelines     |
+| `extend_ai_guidelines_text`             | `string`                                      | Rewrite the composed guidelines section    |
 
 ### Stored options
 
@@ -149,6 +277,7 @@ extend_ai_banned_phrases         ARRAY     [ "phrase", … ]
 extend_ai_role_map               ARRAY     { ability_id: [role, role] }
 extend_ai_vault_enabled          BOOL      Delegate credential checks to vault.
 extend_ai_usage_retention_months INT       How far back to keep usage rows.
+extend_ai_use_guidelines         BOOL      Inject site Guidelines when detected. Default on.
 ```
 
 ---
@@ -198,6 +327,9 @@ Available `{variables}`:
 
 - Built-in: `{ability}`, `{user_login}`, `{user_role}`, `{site_name}`, `{site_url}`, `{current_date}`
 - Post context (when `post_id` is in the ability data): `{post_title}`, `{post_type}`, `{post_status}`
+- Site Guidelines (empty strings when the Gutenberg experiment is absent):
+  `{guidelines}`, `{guidelines_site}`, `{guidelines_copy}`,
+  `{guidelines_images}`, `{guidelines_additional}`, `{guidelines_blocks}`
 - Any scalar from the ability's `$data` payload, lowercased
 
 ---
@@ -207,12 +339,14 @@ Available `{variables}`:
 ```
 extend-ai-enterprise/
 ├── extend-ai-enterprise.php           bootstrap, activation
+├── blueprint.json                     WordPress Playground demo blueprint
 ├── assets/admin.js                    React admin app (no build step)
 ├── includes/
 │   ├── Plugin.php                     wires every module on plugins_loaded
 │   ├── Compat/Version_Gate.php        TESTED_MIN..TESTED_MAX + drift notice
 │   ├── Policy/
 │   │   ├── Prompt_Injector.php        wpai_system_instruction
+│   │   ├── Guidelines_Bridge.php      Gutenberg Guidelines → prompt section
 │   │   ├── Model_Allowlist.php        wpai_preferred_*_models
 │   │   └── PII_Redactor.php           wpai_pre_normalize_content
 │   ├── Access/
@@ -231,7 +365,9 @@ extend-ai-enterprise/
 │   └── Admin/Settings_Page.php        Tools menu pages + script enqueue
 └── tests/
     ├── bootstrap.php
-    └── contract/WPAI_Contract_Test.php
+    └── contract/
+        ├── WPAI_Contract_Test.php         pins WP AI filters, REST, SDK shape
+        └── Guidelines_Bridge_Test.php     pins Gutenberg Guidelines storage contract
 ```
 
 ### Module boot order
@@ -264,9 +400,11 @@ Three guardrails ship in the box:
    monitoring plugins can page, and render an admin error notice. The wrap
    silently no-opping was the worst possible outcome — this turns it loud.
 
-3. **Contract tests.** Nine tests in `tests/contract/WPAI_Contract_Test.php`
-   pin every integration point: filter names, filter signatures, REST
-   namespace, SDK interface shape, abilities API. CI runs them against:
+3. **Contract tests.** The suite in `tests/contract/` pins every integration
+   point: WP AI filter names and signatures, REST namespace, SDK interface
+   shape, abilities API (`WPAI_Contract_Test`), and the Gutenberg Guidelines
+   storage contract — CPT names, taxonomy term, meta keys
+   (`Guidelines_Bridge_Test`). CI runs them against:
    - The pinned WP AI release (gate for our own releases)
    - The WP AI `develop` branch nightly (drift detector for upstream changes
      before they ship)

@@ -8,7 +8,8 @@ License: GPLv2 or later
 
 Enterprise governance wrapper around the WordPress AI plugin. Adds prompt policy,
 model allowlists, PII redaction, RBAC, rate limits, cost caps, output moderation,
-and audit retention — all via the plugin's documented filters. No fork required.
+audit retention, and site-Guidelines-aware review prompts — all via the plugin's
+documented filters. No fork required.
 
 == Architecture ==
 
@@ -16,6 +17,7 @@ Layers, each one a folder in /includes:
 
   Policy/      — shapes inputs before they leave WP
     Prompt_Injector   → wpai_system_instruction
+    Guidelines_Bridge → Gutenberg Guidelines experiment → prompt section
     Model_Allowlist   → wpai_preferred_text|image|vision_models
     PII_Redactor      → wpai_pre_normalize_content
 

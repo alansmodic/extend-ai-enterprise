@@ -1,0 +1,73 @@
+{
+	"$schema": "https://playground.wordpress.net/blueprint-schema.json",
+	"meta": {
+		"title": "Extend AI — Enterprise + WP AI + Gutenberg Guidelines",
+		"description": "Full-stack demo: WordPress AI plugin, Gutenberg Guidelines experiment, and the Extend AI Enterprise governance layer, with sample guidelines and a draft post pre-seeded.",
+		"author": "alansmodic"
+	},
+	"landingPage": "/wp-admin/tools.php?page=extend-ai-enterprise",
+	"login": true,
+	"features": {
+		"networking": true
+	},
+	"preferredVersions": {
+		"php": "8.2",
+		"wp": "latest"
+	},
+	"steps": [
+		{
+			"step": "installPlugin",
+			"pluginData": {
+				"resource": "wordpress.org/plugins",
+				"slug": "gutenberg"
+			},
+			"options": {
+				"activate": true
+			}
+		},
+		{
+			"step": "installPlugin",
+			"pluginData": {
+				"resource": "wordpress.org/plugins",
+				"slug": "ai"
+			},
+			"options": {
+				"activate": true
+			}
+		},
+		{
+			"step": "installPlugin",
+			"pluginData": {
+				"resource": "url",
+				"url": "https://github-proxy.com/proxy/?repo=alansmodic/extend-ai-enterprise&branch=main"
+			},
+			"options": {
+				"activate": true
+			}
+		},
+		{
+			"step": "setSiteOptions",
+			"options": {
+				"blogname": "Extend AI Enterprise Demo",
+				"blogdescription": "WP AI + Gutenberg Guidelines + enterprise governance",
+				"gutenberg-experiments": {
+					"gutenberg-guidelines": true,
+					"gutenberg-content-guidelines": true
+				},
+				"wpai_features_enabled": true,
+				"wpai_feature_editorial-notes_enabled": true,
+				"wpai_feature_editorial-updates_enabled": true,
+				"wpai_feature_title-generation_enabled": true
+			}
+		},
+		{
+			"step": "runPHP",
+			"code": "<?php require_once '/wordpress/wp-load.php';\n\n// Seed the Guidelines singleton. The CPT name depends on the Gutenberg version:\n// `wp_guideline` (current) or `wp_content_guideline` (Gutenberg 22.7).\n$post_type = post_type_exists( 'wp_guideline' ) ? 'wp_guideline' : ( post_type_exists( 'wp_content_guideline' ) ? 'wp_content_guideline' : null );\nif ( $post_type ) {\n\t$guideline_id = wp_insert_post( array(\n\t\t'post_type'   => $post_type,\n\t\t'post_status' => 'publish',\n\t\t'post_title'  => 'Site Guidelines',\n\t) );\n\tupdate_post_meta( $guideline_id, '_guideline_site', 'Lighthouse Roasters is a specialty coffee roaster in Porto. Audience: home-brewing enthusiasts of all levels. Goal: educate without gatekeeping.' );\n\tupdate_post_meta( $guideline_id, '_guideline_copy', 'Tone: warm, direct, plain English. Avoid jargon and superlatives (never claim something is the best). Use sentence case for headings. Always use the Oxford comma.' );\n\tupdate_post_meta( $guideline_id, '_guideline_images', 'Natural light, warm tones. No stock-photo cliches.' );\n\tupdate_post_meta( $guideline_id, '_guideline_additional', 'Define brewing terms on first use. Link to the brewing guide when mentioning ratios.' );\n\tupdate_post_meta( $guideline_id, '_guideline_block_core_paragraph', 'Keep paragraphs under four sentences.' );\n\tupdate_post_meta( $guideline_id, '_guideline_block_core_image', 'Images must include descriptive alt text.' );\n\tif ( taxonomy_exists( 'wp_guideline_type' ) ) {\n\t\twp_set_object_terms( $guideline_id, 'content', 'wp_guideline_type' );\n\t}\n}\n\n// Seed a draft post that deliberately violates the guidelines above, so review notes have something to flag.\nwp_insert_post( array(\n\t'post_status'  => 'draft',\n\t'post_title'   => 'Why Our New Single-Origin Is The Best Coffee Ever',\n\t'post_content' => '<!-- wp:paragraph --><p>Our latest micro-lot is simply the best coffee in the world, full stop, and anyone who has ever experienced the unparalleled, absolutely unbeatable organoleptic complexity of its post-fermentation maceration profile will immediately understand that the TDS extraction yield curve achieved at a 1:16.5 dose-to-beverage mass ratio represents a categorical paradigm shift in the specialty segment, which is why we are confident that no other roaster, anywhere, at any price point, can even begin to approach what we have accomplished here.</p><!-- /wp:paragraph --><!-- wp:paragraph --><p>Buy it now before it sells out.</p><!-- /wp:paragraph -->',\n) );\n"
+		},
+		{
+			"step": "writeFile",
+			"path": "/wordpress/wp-content/mu-plugins/extend-ai-demo-prompt-preview.php",
+			"data": "<?php\n/**\n * Plugin Name: Extend AI Demo — Prompt Preview\n * Description: Playground-only helper. Renders the final system instruction `ai/editorial-notes` receives after Extend AI Enterprise applies its pipeline (override → policy preamble → site Guidelines) — no AI provider key needed.\n */\n\nadd_action( 'admin_menu', static function (): void {\n\tadd_submenu_page(\n\t\t'tools.php',\n\t\t'AI Prompt Preview',\n\t\t'AI Prompt Preview',\n\t\t'manage_options',\n\t\t'extend-ai-demo-preview',\n\t\tstatic function (): void {\n\t\t\t$posts   = get_posts( array( 'post_status' => array( 'draft', 'publish' ), 'posts_per_page' => 1 ) );\n\t\t\t$post_id = $posts ? $posts[0]->ID : 0;\n\t\t\t$final   = apply_filters(\n\t\t\t\t'wpai_system_instruction',\n\t\t\t\t'(The WP AI default instruction for ai/editorial-notes appears here at runtime.)',\n\t\t\t\t'ai/editorial-notes',\n\t\t\t\tarray( 'post_id' => $post_id )\n\t\t\t);\n\t\t\techo '<div class=\"wrap\"><h1>AI Prompt Preview</h1>';\n\t\t\techo '<p>This is the system instruction <code>ai/editorial-notes</code> receives for post #' . (int) $post_id . ' after Extend AI Enterprise applies overrides, the policy preamble, and the site Guidelines. Edit <a href=\"' . esc_url( admin_url( 'options-general.php?page=guidelines-wp-admin' ) ) . '\">Settings → Guidelines</a> and reload to see it change.</p>';\n\t\t\techo '<pre style=\"white-space:pre-wrap;background:#fff;padding:16px;border:1px solid #ccd0d4;\">' . esc_html( (string) $final ) . '</pre></div>';\n\t\t}\n\t);\n} );\n"
+		}
+	]
+}
