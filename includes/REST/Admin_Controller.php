@@ -243,18 +243,18 @@ final class Admin_Controller {
 
 		if ( $out === array() ) {
 			foreach ( array(
-				'ai/title-generation'       => 'Title generation',
-				'ai/excerpt-generation'     => 'Excerpt generation',
-				'ai/meta-description'       => 'Meta description',
-				'ai/summarization'          => 'Summarization',
-				'ai/content-classification' => 'Content classification',
-				'ai/content-resizing'       => 'Content resizing',
-				'ai/comment-moderation'     => 'Comment moderation',
-				'ai/alt-text'               => 'Image alt text',
-				'ai/generate-image'         => 'Image generation',
-				'ai/generate-image-prompt'  => 'Image prompt generation',
-				'ai/editorial-notes'        => 'Editorial notes',
-				'ai/editorial-updates'      => 'Editorial updates',
+				'ai/title-generation'        => 'Title generation',
+				'ai/excerpt-generation'      => 'Excerpt generation',
+				'ai/meta-description'        => 'Meta description',
+				'ai/summarization'           => 'Summarization',
+				'ai/content-classification'  => 'Content classification',
+				'ai/content-resizing'        => 'Content resizing',
+				'ai/comment-moderation'      => 'Comment moderation',
+				'ai/alt-text-generation'     => 'Image alt text',
+				'ai/image-generation'        => 'Image generation',
+				'ai/image-prompt-generation' => 'Image prompt generation',
+				'ai/editorial-notes'         => 'Editorial notes',
+				'ai/editorial-updates'       => 'Editorial updates',
 			) as $id => $label ) {
 				$out[ $id ] = array(
 					'label'               => $label,

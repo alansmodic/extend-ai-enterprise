@@ -39,6 +39,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Governance ability IDs corrected to match upstream.** `Role_Gate` and the
+  prompt-admin label map referenced `ai/generate-image`,
+  `ai/generate-image-prompt`, and `ai/alt-text`; the real WP AI ability IDs are
+  `ai/image-generation`, `ai/image-prompt-generation`, and
+  `ai/alt-text-generation`. The mismatch silently disabled the image-generation
+  role gate (an unmatched key fails open). Test bootstrap feature slugs fixed to
+  match, and a new contract test asserts every governance-referenced ability ID
+  is actually registered.
 - **Transporter wrap no longer fails on sites without a configured AI
   connector.** The AI Client SDK creates its default HTTP transporter lazily —
   only when a provider registers — so on a fresh site (no connector yet) the

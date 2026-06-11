@@ -77,8 +77,8 @@ tests_add_filter(
 			'content-classification',
 			'content-resizing',
 			'comment-moderation',
-			'alt-text',
-			'generate-image',
+			'alt-text-generation',
+			'image-generation',
 			'editorial-notes',
 			'editorial-updates',
 		) as $feature ) {

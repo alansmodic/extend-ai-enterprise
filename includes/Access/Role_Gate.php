@@ -18,7 +18,7 @@ final class Role_Gate {
 	/** @var array<string,string[]> ability_id => allowed role slugs */
 	private const DEFAULT_MAP = array(
 		'ai/comment-moderation' => array( 'administrator', 'editor' ),
-		'ai/generate-image'     => array( 'administrator', 'editor' ),
+		'ai/image-generation'   => array( 'administrator', 'editor' ),
 		// All other abilities default to "any user with publish_posts" (WP AI plugin default).
 	);
 
