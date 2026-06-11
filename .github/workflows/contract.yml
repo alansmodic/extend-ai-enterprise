@@ -15,7 +15,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        wpai_ref: [ '1.0.0', 'develop' ]
+        wpai_ref: [ '1.0.0', '1.0.1', 'develop' ]
     services:
       mysql:
         image: mariadb:10.11

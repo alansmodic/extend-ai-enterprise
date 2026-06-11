@@ -30,8 +30,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   on the Tools → AI Enterprise page and in the `/policies` REST endpoint,
   which also reports read-only `guidelines_detected`.
 
+### Changed
+
+- **Contract test matrix now covers `WordPress/ai@1.0.1`** alongside `@1.0.0`
+  and `@develop`, reflecting upstream's 1.0.1 release. README prerequisites
+  updated to the v1.0.0–v1.0.1 tested range. (`Compat\Version_Gate::TESTED_MAX`
+  already accepted 1.0.1, so no runtime gate change was needed.)
+
 ### Fixed
 
+- **Monthly spend cap now hard-blocks instead of failing open.**
+  `Cost_Tracker` enforced the cap by emptying the model allowlist, but
+  `Model_Allowlist` reads an empty allowlist as "allow all defaults" — so going
+  over budget *removed* the configured model restriction instead of blocking
+  use. Enforcement moved to the capability layer: an over-budget user is denied
+  every `ai/*` ability via `user_has_cap` (the same mechanism `Role_Gate` uses),
+  which stops the request at the Abilities API permission check. Admins
+  (`manage_options`) are exempt by default so a blown cap can't lock out whoever
+  needs to raise it — overridable via the new `extend_ai_budget_cap_exempt`
+  filter. New tests pin the over/under/zero-cap behavior, admin exemption, and
+  the filter wiring.
+- **Governance ability IDs corrected to match upstream.** `Role_Gate` and the
+  prompt-admin label map referenced `ai/generate-image`,
+  `ai/generate-image-prompt`, and `ai/alt-text`; the real WP AI ability IDs are
+  `ai/image-generation`, `ai/image-prompt-generation`, and
+  `ai/alt-text-generation`. The mismatch silently disabled the image-generation
+  role gate (an unmatched key fails open). Test bootstrap feature slugs fixed to
+  match, and a new contract test asserts every governance-referenced ability ID
+  is actually registered.
 - **Transporter wrap no longer fails on sites without a configured AI
   connector.** The AI Client SDK creates its default HTTP transporter lazily —
   only when a provider registers — so on a fresh site (no connector yet) the

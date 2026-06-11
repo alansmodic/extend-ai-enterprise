@@ -142,4 +142,54 @@ final class WPAI_Contract_Test extends WP_UnitTestCase {
 		$namespaces = $server->get_namespaces();
 		$this->assertContains( 'wp-abilities/v1', $namespaces, 'Abilities REST namespace changed — rate limiter and moderator will not match routes.' );
 	}
+
+	/**
+	 * Every ability_id our governance layer hardcodes must resolve to a real
+	 * registered WP AI ability. A wrong ID fails *silently* — Role_Gate keys its
+	 * role allowlist by ability_id and treats a miss as "not configured" (fails
+	 * OPEN), so a typo'd ID disables the restriction without any error. This is
+	 * the guard that would have caught `ai/generate-image` vs `ai/image-generation`.
+	 *
+	 * Registration is brittle in the PHPUnit scaffold (see
+	 * test_wp_ai_subscribes_to_abilities_api_init) — when nothing registers we
+	 * SKIP rather than fail, so this never flakes red; the Studio smoke-test
+	 * covers the end-to-end path. It still catches a wrong ID whenever
+	 * registration succeeds.
+	 */
+	public function test_governance_ability_ids_are_registered(): void {
+		do_action( 'wp_abilities_api_categories_init' );
+		do_action( 'wp_abilities_api_init' );
+
+		if ( ! function_exists( 'wp_get_abilities' ) ) {
+			$this->markTestSkipped( 'Abilities API unavailable in this scaffold run.' );
+		}
+
+		$registered = array_map(
+			static fn( $ability ) => method_exists( $ability, 'get_name' ) ? (string) $ability->get_name() : '',
+			(array) wp_get_abilities()
+		);
+
+		// Filter to the WP AI namespace so an empty registry (scaffold didn't
+		// register) skips instead of failing on every key.
+		$ai_abilities = array_filter( $registered, static fn( $id ) => str_starts_with( (string) $id, 'ai/' ) );
+		if ( $ai_abilities === array() ) {
+			$this->markTestSkipped( 'No ai/* abilities registered in this scaffold run — Studio smoke-test covers registration.' );
+		}
+
+		// IDs our governance maps depend on. Keep in sync with
+		// Access\Role_Gate::DEFAULT_MAP and REST\Admin_Controller's label map.
+		$required = array(
+			'ai/comment-moderation',
+			'ai/image-generation',
+			'ai/image-prompt-generation',
+			'ai/alt-text-generation',
+		);
+		foreach ( $required as $ability_id ) {
+			$this->assertContains(
+				$ability_id,
+				$ai_abilities,
+				"Governance layer references '{$ability_id}' but WP AI does not register it — the role gate / prompt UI for this ability silently no-ops. See Compat naming: ID is 'ai/' . get_id()."
+			);
+		}
+	}
 }
