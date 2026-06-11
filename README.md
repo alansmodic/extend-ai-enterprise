@@ -204,9 +204,9 @@ style advice.
 
 - WordPress 6.6 or newer
 - PHP 8.1 or newer
-- [WordPress AI plugin](https://wordpress.org/plugins/ai/) v1.0.0 (the upstream
-  version we've tested against — see `Compat\Version_Gate::TESTED_MAX` for the
-  ceiling)
+- [WordPress AI plugin](https://wordpress.org/plugins/ai/) v1.0.0–v1.0.1 (the
+  upstream versions we've tested against — see `Compat\Version_Gate::TESTED_MAX`
+  for the ceiling)
 
 ### From source
 

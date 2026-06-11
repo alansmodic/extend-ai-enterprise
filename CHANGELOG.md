@@ -30,6 +30,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   on the Tools → AI Enterprise page and in the `/policies` REST endpoint,
   which also reports read-only `guidelines_detected`.
 
+### Changed
+
+- **Contract test matrix now covers `WordPress/ai@1.0.1`** alongside `@1.0.0`
+  and `@develop`, reflecting upstream's 1.0.1 release. README prerequisites
+  updated to the v1.0.0–v1.0.1 tested range. (`Compat\Version_Gate::TESTED_MAX`
+  already accepted 1.0.1, so no runtime gate change was needed.)
+
 ### Fixed
 
 - **Transporter wrap no longer fails on sites without a configured AI
