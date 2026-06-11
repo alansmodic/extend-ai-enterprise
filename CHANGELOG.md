@@ -39,6 +39,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Monthly spend cap now hard-blocks instead of failing open.**
+  `Cost_Tracker` enforced the cap by emptying the model allowlist, but
+  `Model_Allowlist` reads an empty allowlist as "allow all defaults" — so going
+  over budget *removed* the configured model restriction instead of blocking
+  use. Enforcement moved to the capability layer: an over-budget user is denied
+  every `ai/*` ability via `user_has_cap` (the same mechanism `Role_Gate` uses),
+  which stops the request at the Abilities API permission check. Admins
+  (`manage_options`) are exempt by default so a blown cap can't lock out whoever
+  needs to raise it — overridable via the new `extend_ai_budget_cap_exempt`
+  filter. New tests pin the over/under/zero-cap behavior, admin exemption, and
+  the filter wiring.
 - **Governance ability IDs corrected to match upstream.** `Role_Gate` and the
   prompt-admin label map referenced `ai/generate-image`,
   `ai/generate-image-prompt`, and `ai/alt-text`; the real WP AI ability IDs are
