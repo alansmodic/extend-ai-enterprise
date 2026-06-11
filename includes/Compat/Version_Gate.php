@@ -16,7 +16,13 @@ final class Version_Gate {
 	/** Lowest WP AI version we've verified against. */
 	public const TESTED_MIN = '1.0.0';
 
-	/** Highest WP AI version we've verified against. Bump each release after CI passes. */
+	/**
+	 * Ceiling of the WP AI compatibility band this build targets — NOT a version
+	 * we pin-test. We verify the band's endpoints in CI (currently 1.0.0 and
+	 * 1.0.1) and trust patch releases within it; the nightly drift cron and the
+	 * `@develop` contract leg catch real breakage. Raise this when moving the
+	 * band to a new minor (e.g. 1.1.x).
+	 */
 	public const TESTED_MAX = '1.0.99';
 
 	public function register(): void {
