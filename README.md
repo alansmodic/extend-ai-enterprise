@@ -94,7 +94,7 @@ You land on **Tools → AI Enterprise**. From there:
 | **Role-based access**           | Per-ability allowlist of WP roles. Disable specific experiments per-role or globally.               |
 | **Credential delegation**       | Hand off credential resolution to an enterprise vault (AWS Secrets Manager, HashiCorp Vault, SSO).  |
 | **Rate limiting**               | Per-minute and per-day quotas per user, enforced at the REST layer (no provider spend on rejected). |
-| **Cost tracking + caps**        | Per-user monthly spend rollup in a dedicated table. Hard cap drops the model allowlist to nothing.  |
+| **Cost tracking + caps**        | Per-user monthly spend rollup in a dedicated table. Hard cap denies all AI abilities once a user is over budget (admins exempt). |
 | **Output moderation**           | Banned-phrase scan on every ability response. Pluggable backend for richer moderation.              |
 | **Audit retention**             | Sets the WP AI log retention via its own filter. Separate cron for our usage table.                 |
 | **Drift detection**             | Version pin + admin notice when running outside the tested WP AI range.                             |
@@ -204,9 +204,9 @@ style advice.
 
 - WordPress 6.6 or newer
 - PHP 8.1 or newer
-- [WordPress AI plugin](https://wordpress.org/plugins/ai/) v1.0.0–v1.0.1 (the
-  upstream versions we've tested against — see `Compat\Version_Gate::TESTED_MAX`
-  for the ceiling)
+- [WordPress AI plugin](https://wordpress.org/plugins/ai/) — the **1.0.x**
+  compatibility band. Pin-tested on v1.0.0 and v1.0.1; patch releases within the
+  band are expected to work (see `Compat\Version_Gate::TESTED_MAX`)
 
 ### From source
 
