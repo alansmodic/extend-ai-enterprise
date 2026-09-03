@@ -1,14 +1,13 @@
 <?php
 /**
  * Per-ability prompt customization. Applies overrides stored in Prompt_Library
- * to the WP AI plugin's `wpai_system_instruction` filter.
+ * to WordPress AI 1.3's native per-ability filters (wpai_{slug}_system_instruction).
  *
  * Resolution order, applied in sequence on top of the WP AI default:
- *   1. Global policy preamble (option `extend_ai_policy_preamble`) — prepended.
- *   2. Per-ability override (table `wp_extend_ai_prompts`) — prepend/append/replace.
- *   3. Site Guidelines (Gutenberg experiment, via Guidelines_Bridge) — appended
- *      to editorial-review abilities, unless the override template already
- *      placed them via a `{guidelines*}` variable.
+ *   1. Global policy preamble (option `extend_ai_policy_preamble`) — prepended via
+ *      the global wpai_system_instruction filter.
+ *   2. Per-ability override (table `wp_extend_ai_prompts`) — prepend/append/replace
+ *      via per-ability wpai_{slug}_system_instruction filters.
  *
  * Templates support `{var}` interpolation from the filter's `$data` payload plus
  * a handful of built-in variables (user_login, site_name, current_date).
@@ -24,34 +23,58 @@ use ExtendAI\Enterprise\Storage\Prompt_Library;
 
 final class Prompt_Injector {
 
-	/** Abilities that receive the site-guidelines section by default. */
-	private const GUIDELINES_ABILITIES = array( 'ai/editorial-notes', 'ai/editorial-updates' );
-
 	public function __construct(
-		private ?Prompt_Library $library = null,
-		private ?Guidelines_Bridge $guidelines = null
+		private ?Prompt_Library $library = null
 	) {
-		$this->library    ??= new Prompt_Library();
-		$this->guidelines ??= new Guidelines_Bridge();
+		$this->library ??= new Prompt_Library();
 	}
 
 	public function register(): void {
-		add_filter( 'wpai_system_instruction', array( $this, 'inject' ), 10, 3 );
+		// Global policy preamble on the global filter.
+		add_filter( 'wpai_system_instruction', array( $this, 'inject_global_preamble' ), 10, 3 );
+
+		// Register per-ability filters for all abilities with overrides.
+		add_action( 'wp_abilities_api_init', array( $this, 'register_per_ability_filters' ), 20 );
 	}
 
 	/**
+	 * Apply global policy preamble to all abilities.
+	 *
 	 * @param string              $instruction  Default system instruction from the ability.
 	 * @param string              $ability_name e.g. "ai/title-generation".
 	 * @param array<string,mixed> $data         Per-call data the ability is about to use.
 	 */
-	public function inject( string $instruction, string $ability_name, array $data ): string {
-		$result = $this->apply_override( $instruction, $ability_name, $data );
-		$result = $this->apply_global_preamble( $result, $ability_name );
-		$result = $this->apply_guidelines( $result, $ability_name, $data );
-		return $result;
+	public function inject_global_preamble( string $instruction, string $ability_name, array $data ): string {
+		unset( $data );
+		$default  = (string) get_option( 'extend_ai_policy_preamble', '' );
+		$preamble = (string) apply_filters( 'extend_ai_policy_preamble', $default, $ability_name );
+		return $preamble === '' ? $instruction : $preamble . "\n\n" . $instruction;
 	}
 
-	private function apply_override( string $instruction, string $ability_name, array $data ): string {
+	/**
+	 * Register a scoped filter for each ability that currently has an override.
+	 *
+	 * Runs on wp_abilities_api_init so WP AI's abilities (and therefore its
+	 * `wpai_{slug}_system_instruction` hooks) exist by the time we subscribe.
+	 */
+	public function register_per_ability_filters(): void {
+		foreach ( array_keys( $this->library->all() ) as $ability_id ) {
+			$slug = self::ability_to_slug( (string) $ability_id );
+			if ( '' === $slug ) {
+				continue;
+			}
+			add_filter( "wpai_{$slug}_system_instruction", array( $this, 'inject_per_ability_override' ), 10, 3 );
+		}
+	}
+
+	/**
+	 * Apply per-ability prompt override using the native per-ability filter.
+	 *
+	 * @param string              $instruction  Default system instruction from the ability.
+	 * @param string              $ability_name e.g. "ai/title-generation".
+	 * @param array<string,mixed> $data         Per-call data the ability is about to use.
+	 */
+	public function inject_per_ability_override( string $instruction, string $ability_name, array $data ): string {
 		$override = $this->library->get( $ability_name );
 		if ( ! $override ) {
 			return $instruction;
@@ -66,67 +89,6 @@ final class Prompt_Injector {
 		};
 	}
 
-	private function apply_global_preamble( string $instruction, string $ability_name ): string {
-		$default  = (string) get_option( 'extend_ai_policy_preamble', '' );
-		$preamble = (string) apply_filters( 'extend_ai_policy_preamble', $default, $ability_name );
-		return $preamble === '' ? $instruction : $preamble . "\n\n" . $instruction;
-	}
-
-	/**
-	 * Append the site-guidelines section (Gutenberg Guidelines experiment) for
-	 * editorial-review abilities. No-ops when the experiment is absent, the
-	 * toggle is off, or the guidelines are empty. When the ability's override
-	 * template already consumed a `{guidelines*}` variable, the section is in
-	 * the prompt already — only the audit action fires.
-	 *
-	 * @param array<string,mixed> $data
-	 */
-	private function apply_guidelines( string $instruction, string $ability_name, array $data ): string {
-		/**
-		 * Filter which abilities automatically receive the site-guidelines section.
-		 *
-		 * @param string[] $abilities
-		 * @param string   $ability_name The ability currently being prompted.
-		 */
-		$abilities = (array) apply_filters( 'extend_ai_guidelines_abilities', self::GUIDELINES_ABILITIES, $ability_name );
-
-		$override      = $this->library->get( $ability_name );
-		$used_variable = $override && str_contains( (string) $override['template'], '{guidelines' );
-
-		if ( ! $used_variable && ! in_array( $ability_name, $abilities, true ) ) {
-			return $instruction;
-		}
-
-		$section = $this->guidelines->compose( $data );
-		if ( $section === '' ) {
-			return $instruction;
-		}
-
-		$reference = $this->guidelines->reference();
-
-		/**
-		 * Fires when site Guidelines were injected into an ability's prompt.
-		 *
-		 * Lets audit infrastructure record which version of the site's standards
-		 * a given AI response was based on.
-		 *
-		 * @param string $ability_name
-		 * @param int    $guideline_post_id
-		 * @param int    $guideline_revision_id Latest revision, 0 if none exist.
-		 */
-		do_action(
-			'extend_ai_guidelines_applied',
-			$ability_name,
-			(int) ( $reference['post_id'] ?? 0 ),
-			(int) ( $reference['revision_id'] ?? 0 )
-		);
-
-		if ( $used_variable ) {
-			return $instruction;
-		}
-
-		return rtrim( $instruction ) . "\n\n" . $section;
-	}
 
 	/** @param array<string,mixed> $data */
 	private function interpolate( string $template, string $ability_name, array $data ): string {
@@ -181,5 +143,22 @@ final class Prompt_Injector {
 		 * @param array<string,mixed>  $data
 		 */
 		return (array) apply_filters( 'extend_ai_prompt_variables', $vars, $ability_name, $data );
+	}
+
+	/**
+	 * Derive WP AI's hook-safe slug from an ability name.
+	 *
+	 * Mirrors the slug helper WP AI 1.3 added in Abstract_Ability (#770): drop the
+	 * namespace, then collapse every non-alphanumeric run to a single underscore.
+	 * `ai/title-generation` → `title_generation` → `wpai_title_generation_system_instruction`.
+	 *
+	 * Public and static so the contract suite can pin the derivation directly — a
+	 * wrong slug means our filter subscribes to a hook nothing ever fires, which
+	 * fails silently.
+	 */
+	public static function ability_to_slug( string $ability_id ): string {
+		$name = (string) preg_replace( '#^[^/]+/#', '', trim( $ability_id ) );
+		$slug = (string) preg_replace( '/[^a-z0-9]+/i', '_', $name );
+		return strtolower( trim( $slug, '_' ) );
 	}
 }

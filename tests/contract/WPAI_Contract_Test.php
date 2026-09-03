@@ -17,6 +17,8 @@
 declare( strict_types=1 );
 
 use ExtendAI\Enterprise\Compat\Version_Gate;
+use ExtendAI\Enterprise\Policy\Prompt_Injector;
+use ExtendAI\Enterprise\Storage\Prompt_Library;
 
 final class WPAI_Contract_Test extends WP_UnitTestCase {
 
@@ -101,28 +103,62 @@ final class WPAI_Contract_Test extends WP_UnitTestCase {
 	}
 
 	/**
-	 * WordPress AI 1.3.0 per-ability filters must exist.
-	 * These allow ability-specific prompt customization without affecting others.
-	 * The global wpai_system_instruction still exists; the per-ability filter runs after it.
+	 * WP AI 1.3 derives a hook-safe slug per ability (#770): drop the namespace,
+	 * collapse non-alphanumerics to underscores. `ai/title-generation` becomes
+	 * `wpai_title_generation_system_instruction`.
+	 *
+	 * Our Prompt_Injector must derive the byte-identical slug. Get it wrong and we
+	 * subscribe to a hook nothing ever fires — every per-ability prompt override
+	 * silently stops applying, with no error anywhere.
 	 */
-	public function test_per_ability_filter_pattern_exists(): void {
-		// WordPress AI 1.3.0+ uses wpai_{slug}_system_instruction where slug is derived from ability name.
-		// ai/title-generation becomes wpai_title_generation_system_instruction.
-		$captured = null;
-		$listener = static function ( string $instruction, string $ability_name, array $data ) use ( &$captured ): string {
-			$captured = compact( 'instruction', 'ability_name', 'data' );
-			return $instruction;
-		};
+	public function test_ability_slug_derivation_matches_wp_ai(): void {
+		$cases = array(
+			'ai/title-generation'        => 'title_generation',
+			'ai/excerpt-generation'      => 'excerpt_generation',
+			'ai/meta-description'        => 'meta_description',
+			'ai/content-classification'  => 'content_classification',
+			'ai/image-prompt-generation' => 'image_prompt_generation',
+			'ai/alt-text-generation'     => 'alt_text_generation',
+			'ai/editorial-notes'         => 'editorial_notes',
+		);
 
-		// Test that the per-ability filter pattern works (if WP AI 1.3+ is running).
-		// We fire the filter ourselves since we don't have full WP AI bootstrap in tests.
-		add_filter( 'wpai_title_generation_system_instruction', $listener, 99, 3 );
-		$result = apply_filters( 'wpai_title_generation_system_instruction', 'title instruction', 'ai/title-generation', array() );
-		remove_filter( 'wpai_title_generation_system_instruction', $listener, 99 );
+		foreach ( $cases as $ability_id => $expected ) {
+			$this->assertSame(
+				$expected,
+				Prompt_Injector::ability_to_slug( $ability_id ),
+				"Slug for '{$ability_id}' must be '{$expected}' to match WP AI's hook naming."
+			);
+		}
+	}
 
-		$this->assertIsArray( $captured, 'Per-ability filter pattern not wired (expected in WP AI 1.3+).' );
-		$this->assertSame( 'title instruction', $result );
-		$this->assertSame( 'title instruction', $captured['instruction'] );
+	/**
+	 * An ability with a stored override must end up subscribed to the correctly
+	 * named scoped hook, and that hook must actually transform the instruction.
+	 *
+	 * This is the guard that catches a slug/registration mismatch end-to-end
+	 * rather than trusting the derivation helper in isolation.
+	 */
+	public function test_override_subscribes_to_scoped_hook_and_applies(): void {
+		$library = new Prompt_Library();
+		$library->put( 'ai/title-generation', Prompt_Library::MODE_REPLACE, 'Custom title rules.', 0 );
+
+		( new Prompt_Injector( $library ) )->register_per_ability_filters();
+
+		$this->assertNotFalse(
+			has_filter( 'wpai_title_generation_system_instruction' ),
+			'Prompt_Injector did not subscribe to the scoped hook — per-ability overrides are inert.'
+		);
+
+		$this->assertSame(
+			'Custom title rules.',
+			apply_filters(
+				'wpai_title_generation_system_instruction',
+				'WP AI default.',
+				'ai/title-generation',
+				array()
+			),
+			'Scoped hook fired but the stored override was not applied.'
+		);
 	}
 
 	/** Content normalization filters must exist with single-string arg. */
