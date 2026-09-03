@@ -7,24 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
+### Removed
 
-- **WordPress 7.1 lifecycle filter support.** Rate limiting, output moderation,
-  and all governance enforcement now use the WordPress 7.1 Abilities API lifecycle
-  filters (`wp_pre_execute_ability`, `wp_ability_execute_result`) instead of
-  REST-only hooks. Governance gates now apply to **all execution paths** —
-  REST API, MCP servers, WP-CLI commands, and direct PHP `WP_Ability::execute()`
-  calls — ensuring no bypass routes exist.
-- **Contract tests for WordPress 7.1 lifecycle filters.** New tests validate
-  that `wp_pre_execute_ability`, `wp_ability_normalize_input`, and
-  `wp_ability_execute_result` filters exist and have the correct signatures.
-  Tests also verify our governance modules properly subscribe to these filters.
-- **Contract tests for WordPress AI 1.3.x per-ability filters.** Validates the
-  new `wpai_{slug}_system_instruction` pattern introduced in WordPress AI 1.3.0
-  for ability-specific prompt customization.
+- **Guidelines_Bridge module** — WordPress AI 1.3.0 ships native Guidelines
+  injection (WordPress/ai #359, `includes/Services/Guidelines.php`). Our
+  `Policy/Guidelines_Bridge` duplicated this functionality and caused
+  double-injection when both were enabled. DELETED: `Guidelines_Bridge.php`,
+  `Guidelines_Bridge_Test.php`, `extend_ai_use_guidelines` option,
+  `extend_ai_guidelines_*` filters, admin UI toggle, REST API
+  `guidelines_detected` field, `{guidelines*}` prompt template variables.
+  **Migration:** Enable Gutenberg Guidelines experiment and use WordPress AI's
+  `wpai_use_guidelines` filter to control injection.
 
 ### Changed
 
+- **Prompt_Injector retargeted to WordPress AI 1.3 per-ability filters.**
+  Prompt overrides now use native `wpai_{slug}_system_instruction` filters
+  (e.g., `wpai_title_generation_system_instruction`) instead of hooking only
+  the global `wpai_system_instruction`. Global policy preamble still uses
+  `wpai_system_instruction`. Per-ability filters are registered dynamically for
+  abilities with prompt overrides in the library.
 - **WordPress AI compatibility updated to 1.3.x.** `Compat\Version_Gate::TESTED_MIN`
   raised to `1.3.0` and `TESTED_MAX` to `1.3.99`, reflecting testing against
   WordPress AI 1.3.0 which added per-ability filter extension points, Custom
@@ -45,6 +47,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `wp_ability_*` capability check regardless of execution path. Verified that
   this pattern remains universal with WordPress 7.1.
 
+### Added
+
+- **Contract tests for WordPress 7.1 lifecycle filters.** New tests validate
+  that `wp_pre_execute_ability`, `wp_ability_normalize_input`, and
+  `wp_ability_execute_result` filters exist and have the correct signatures.
+  Tests also verify our governance modules properly subscribe to these filters.
+- **Contract tests for WordPress AI 1.3.x per-ability filters.** Validates the
+  new `wpai_{slug}_system_instruction` pattern introduced in WordPress AI 1.3.0
+  for ability-specific prompt customization.
+- **CI matrix updated to WordPress AI 1.3.0.** `.github/workflows/contract.yml`
+  now tests against WordPress AI 1.3.0 and develop (removed 1.0.0/1.0.1).
+
 ### Fixed
 
 - **Governance enforcement gaps closed.** Rate limiting and output moderation
@@ -54,27 +68,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   enforcement to the WordPress 7.1 execution lifecycle filters ensures every
   AI ability invocation — regardless of caller — passes through rate limits,
   spend caps, and output moderation before any model call or result return.
-
-- **Site Guidelines integration** (Gutenberg "Guidelines" experiment, 22.7+).
-  When the experiment is active, the published content-guidelines singleton is
-  composed into a "Site guidelines" prompt section and appended to editorial
-  review abilities (`ai/editorial-notes`, `ai/editorial-updates`), so
-  AI-generated review notes reflect the site's actual standards. Per-block
-  rules are narrowed to block types present in the post under review. Sites
-  without the experiment are untouched — detection is a runtime
-  `post_type_exists()` check covering both the current (`wp_guideline`) and
-  the 22.7 (`wp_content_guideline`) post type names.
-- New prompt-template variables: `{guidelines}`, `{guidelines_site}`,
-  `{guidelines_copy}`, `{guidelines_images}`, `{guidelines_additional}`,
-  `{guidelines_blocks}`. Using any of them in an override template suppresses
-  the automatic append.
-- New filters: `extend_ai_guidelines_enabled`, `extend_ai_guidelines_abilities`,
-  `extend_ai_guidelines_statuses`, `extend_ai_guidelines_text`. New action
-  `extend_ai_guidelines_applied` (ability, guideline post ID, latest revision
-  ID) for audit trails.
-- "Use site Guidelines" toggle (option `extend_ai_use_guidelines`, default on)
-  on the Tools → AI Enterprise page and in the `/policies` REST endpoint,
-  which also reports read-only `guidelines_detected`.
 
 ### Compatibility Notes
 
@@ -89,6 +82,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `ai/get-post-details` and `core/read-content` behind an opt-in toggle in
   Settings → AI → Admin Experiments. Enable it if your integration relies on
   those abilities.
+- **Guidelines now use WordPress AI native support.** WordPress AI 1.3.0 ships
+  native Guidelines injection. Use `wpai_use_guidelines` filter to control.
+  Our Guidelines_Bridge has been removed to avoid double-injection.
 
 ---
 
