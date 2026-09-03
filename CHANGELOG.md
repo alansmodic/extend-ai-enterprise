@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+_Nothing yet._
+
+---
+
+## [0.2.0] — 2026-09-03
+
+### Breaking
+
+- **WordPress 7.1 is now the minimum** (`Requires at least: 7.1`). Rate limiting
+  and output moderation moved off the REST hooks entirely and onto the Abilities
+  API execution lifecycle, which ships in 7.1. On an older release those gates
+  would register against hooks that never fire and enforce *nothing* — so the
+  plugin now declines to activate rather than fail open silently.
+- **`replace` prompt mode no longer re-applies the policy preamble.** The
+  preamble now rides on the global `wpai_system_instruction` filter and overrides
+  on the ability-scoped one, which WP AI runs afterwards; a `replace` template
+  therefore supersedes both, matching what the editor UI has always claimed
+  ("Replace uses only your template"). Use `prepend`/`append` to keep the
+  preamble, or restate the policy text inside the template.
+
 ### Removed
 
 - **Guidelines_Bridge module** — WordPress AI 1.3.0 ships native Guidelines
@@ -53,14 +73,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   that `wp_pre_execute_ability`, `wp_ability_normalize_input`, and
   `wp_ability_execute_result` filters exist and have the correct signatures.
   Tests also verify our governance modules properly subscribe to these filters.
-- **Contract tests for WordPress AI 1.3.x per-ability filters.** Validates the
-  new `wpai_{slug}_system_instruction` pattern introduced in WordPress AI 1.3.0
-  for ability-specific prompt customization.
+- **Contract tests for the ability→slug derivation.** The per-ability filter name
+  is computed, so a wrong slug means subscribing to a hook nothing fires — a
+  failure with no error anywhere. `test_ability_slug_derivation_matches_wp_ai`
+  pins the derivation against the documented ability names, and
+  `test_override_subscribes_to_scoped_hook_and_applies` seeds a real override and
+  asserts it both lands on the correctly named hook and transforms the
+  instruction.
 - **CI matrix updated to WordPress AI 1.3.0.** `.github/workflows/contract.yml`
   now tests against WordPress AI 1.3.0 and develop (removed 1.0.0/1.0.1).
 
+### Documentation & demo
+
+- **Playground blueprint rebuilt around what the plugin still does.** It no
+  longer installs Gutenberg or hand-seeds a guidelines CPT (that storage layout
+  was never ours to reverse-engineer, and guidelines are WP AI's job now).
+  Instead it seeds a policy preamble, a per-ability override, and governance
+  limits low enough to actually trip during a demo. The prompt-preview helper
+  applies the global and ability-scoped filters in WP AI's real order.
+- **Architecture docs corrected.** The README tree and `readme.txt` still listed
+  `Guidelines_Bridge`, the deleted `Guidelines_Bridge_Test`, and
+  `rest_pre_dispatch`/`rest_post_dispatch` for the governance modules. `readme.txt`
+  also still sold "site-Guidelines-aware review prompts" as a feature.
+- **`Transporter_Wrap`, `Credential_Vault`, and `Retention` demoted in the docs**
+  from headline capabilities to implementation details. No code change: the wrap
+  is still required because native `log_ai_request()` does not produce the
+  per-user USD rollups `wp_extend_ai_usage` needs, and the vault remains a thin
+  filter seam rather than an integration.
+
 ### Fixed
 
+- **Per-ability prompt overrides never applied.** `ability_to_slug()` stripped the
+  `ai/` namespace but left hyphens intact, producing
+  `wpai_title-generation_system_instruction` where WP AI fires
+  `wpai_title_generation_system_instruction`. Every override subscribed to a
+  non-existent hook and silently did nothing. Derivation now matches WP AI's
+  helper: drop the namespace, collapse non-alphanumeric runs to underscores,
+  lowercase.
+- **Stale `{guidelines*}` variables advertised in the prompt editor.** The help
+  text still listed `{guidelines}`, `{guidelines_copy}` and friends after the
+  bridge was deleted. Nothing defined them, and unresolved placeholders are left
+  verbatim in the template, so they were being sent to the model as literal text.
 - **Governance enforcement gaps closed.** Rate limiting and output moderation
   previously applied only to REST API invocations. MCP servers (via
   `log_ai_request()` in WordPress AI 1.3.0), WP-CLI commands, and direct PHP
@@ -71,10 +124,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Compatibility Notes
 
-- **WordPress 7.1+ required** for universal governance enforcement. The
-  lifecycle filters (`wp_pre_execute_ability`, `wp_ability_execute_result`)
-  ship in WordPress 7.1. Sites running WordPress 7.0 or earlier can still use
-  this plugin, but governance will only enforce on REST API calls.
+- **WordPress 7.1+ required, enforced at activation.** The lifecycle filters
+  (`wp_pre_execute_ability`, `wp_ability_execute_result`) ship in WordPress 7.1,
+  and the REST-layer hooks they replaced are gone. There is no partial-enforcement
+  fallback on older releases: the gates would be inert, so `Requires at least`
+  blocks activation instead.
 - **WordPress AI 1.3.x recommended.** This release is tested against WordPress
   AI 1.3.0. The 1.0.x branch is no longer tested; see the contract test matrix
   for version coverage.
@@ -239,5 +293,6 @@ no fork required.
 - `bin/install-wp-tests.sh` — standard WordPress test scaffold installer for
   local PHPUnit runs.
 
-[Unreleased]: https://github.com/alansmodic/extend-ai-enterprise/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/alansmodic/extend-ai-enterprise/compare/v0.2.0...HEAD
+[0.2.0]:      https://github.com/alansmodic/extend-ai-enterprise/compare/v0.1.0...v0.2.0
 [0.1.0]:      https://github.com/alansmodic/extend-ai-enterprise/releases/tag/v0.1.0

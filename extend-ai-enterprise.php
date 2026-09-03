@@ -2,8 +2,8 @@
 /**
  * Plugin Name: Extend AI — Enterprise
  * Description: Enterprise governance wrapper around the WordPress AI plugin (wordpress/ai). Adds policy, RBAC, audit retention, rate limits, cost tracking, and output moderation via the plugin's documented filters — no fork required.
- * Version: 0.1.0
- * Requires at least: 6.6
+ * Version: 0.2.0
+ * Requires at least: 7.1
  * Requires PHP: 8.1
  * Requires Plugins: ai
  * Author: Extend AI
@@ -19,7 +19,7 @@ namespace ExtendAI\Enterprise;
 
 defined( 'ABSPATH' ) || exit;
 
-const VERSION   = '0.1.0';
+const VERSION   = '0.2.0';
 const PLUGIN_ID = 'extend-ai-enterprise';
 
 define( 'EXTEND_AI_ENTERPRISE_FILE', __FILE__ );

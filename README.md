@@ -165,7 +165,9 @@ prompt customizations using WordPress AI 1.3's per-ability filters.
 
 ### Prerequisites
 
-- WordPress 7.1 or newer (for universal governance enforcement via lifecycle filters)
+- WordPress 7.1 or newer — **required**, not just recommended. The governance
+  gates hook the Abilities API execution lifecycle, which ships in 7.1; on older
+  releases they would be inert, so the plugin declines to activate.
 - PHP 8.1 or newer
 - [WordPress AI plugin](https://wordpress.org/plugins/ai/) — the **1.3.x**
   compatibility band. Tested on v1.3.0; patch releases within the
