@@ -270,20 +270,20 @@ final class Admin_Controller {
 	public function get_policies(): \WP_REST_Response {
 		return new \WP_REST_Response(
 			array(
-				'preamble'            => (string) get_option( 'extend_ai_policy_preamble', '' ),
-				'rate_limits'         => (array) get_option(
+				'preamble'           => (string) get_option( 'extend_ai_policy_preamble', '' ),
+				'rate_limits'        => (array) get_option(
 					'extend_ai_rate_limits',
 					array(
 						'minute' => 20,
 						'day'    => 500,
 					)
 				),
-				'monthly_user_cap'    => (float) get_option( 'extend_ai_monthly_user_cap_usd', 0 ),
-				'log_retention_days'  => (int) get_option( 'extend_ai_log_retention_days', 90 ),
-				'model_allowlist'     => (array) get_option( 'extend_ai_model_allowlist', array() ),
-				'disabled_features'   => (array) get_option( 'extend_ai_disabled_features', array() ),
-				'banned_phrases'      => (array) get_option( 'extend_ai_banned_phrases', array() ),
-				'redact_pii'          => (bool) get_option( 'extend_ai_redact_pii', true ),
+				'monthly_user_cap'   => (float) get_option( 'extend_ai_monthly_user_cap_usd', 0 ),
+				'log_retention_days' => (int) get_option( 'extend_ai_log_retention_days', 90 ),
+				'model_allowlist'    => (array) get_option( 'extend_ai_model_allowlist', array() ),
+				'disabled_features'  => (array) get_option( 'extend_ai_disabled_features', array() ),
+				'banned_phrases'     => (array) get_option( 'extend_ai_banned_phrases', array() ),
+				'redact_pii'         => (bool) get_option( 'extend_ai_redact_pii', true ),
 			)
 		);
 	}
