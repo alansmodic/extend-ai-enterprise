@@ -12,6 +12,7 @@ namespace ExtendAI\Enterprise;
 use ExtendAI\Enterprise\Access\Credential_Vault;
 use ExtendAI\Enterprise\Access\Role_Gate;
 use ExtendAI\Enterprise\Admin\Settings_Page;
+use ExtendAI\Enterprise\Compat\Upgrader;
 use ExtendAI\Enterprise\Compat\Version_Gate;
 use ExtendAI\Enterprise\Governance\Cost_Tracker;
 use ExtendAI\Enterprise\Governance\Output_Moderator;
@@ -32,7 +33,8 @@ final class Plugin {
 	}
 
 	public function boot(): void {
-		// Compatibility — warn when running outside the tested WP AI version range.
+		// Compatibility — migrate stored state, then warn when running outside the tested WP AI version range.
+		( new Upgrader() )->register();
 		( new Version_Gate() )->register();
 
 		// Transport-level event source — emits extend_ai_request_completed.

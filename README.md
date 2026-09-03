@@ -305,6 +305,7 @@ extend-ai-enterprise/
 ├── includes/
 │   ├── Plugin.php                     wires every module on plugins_loaded
 │   ├── Compat/Version_Gate.php        TESTED_MIN..TESTED_MAX + drift notice
+│   ├── Compat/Upgrader.php            0.1 → 0.2 stored-state migrations
 │   ├── Policy/
 │   │   ├── Prompt_Injector.php        wpai_system_instruction (preamble)
 │   │   │                              wpai_{slug}_system_instruction (overrides)
@@ -333,12 +334,13 @@ extend-ai-enterprise/
 
 ### Module boot order
 
-1. **Version_Gate** — admin notice if running outside `TESTED_MIN..TESTED_MAX`.
-2. **Transporter_Wrap** — installs decorator on `AiClient::defaultRegistry()` at `wp_loaded:20` and `admin_init:20` (after upstream's wrap at priority 1). Emits `extend_ai_request_completed` for every provider call.
-3. **Policy modules** — register their filters on the AI plugin's documented hooks.
-4. **Access modules** — register role gates and credential delegation.
-5. **Governance modules** — subscribe to WordPress 7.1 Abilities API lifecycle filters (`wp_pre_execute_ability`, `wp_ability_execute_result`), `user_has_cap`, and `extend_ai_request_completed`. Schedule cron.
-6. **Admin** — REST controller + Tools pages + script enqueue.
+1. **Upgrader** — one-shot stored-state migrations (schema option `extend_ai_schema_version`).
+2. **Version_Gate** — admin notice if running outside `TESTED_MIN..TESTED_MAX`.
+3. **Transporter_Wrap** — installs decorator on `AiClient::defaultRegistry()` at `wp_loaded:20` and `admin_init:20` (after upstream's wrap at priority 1). Emits `extend_ai_request_completed` for every provider call.
+4. **Policy modules** — register their filters on the AI plugin's documented hooks.
+5. **Access modules** — register role gates and credential delegation.
+6. **Governance modules** — subscribe to WordPress 7.1 Abilities API lifecycle filters (`wp_pre_execute_ability`, `wp_ability_execute_result`), `user_has_cap`, and `extend_ai_request_completed`. Schedule cron.
+7. **Admin** — REST controller + Tools pages + script enqueue.
 
 ---
 

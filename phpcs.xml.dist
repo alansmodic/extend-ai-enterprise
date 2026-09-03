@@ -17,7 +17,7 @@
 	<arg value="ps"/>
 
 	<config name="testVersion" value="8.1-"/>
-	<config name="minimum_wp_version" value="6.6"/>
+	<config name="minimum_wp_version" value="7.1"/>
 
 	<rule ref="WordPress-Core">
 		<!-- We use short array syntax; WP-Core forbids it. Modern PHP code, deliberate choice. -->
@@ -76,6 +76,9 @@
 		a WP filesystem operation — it's terminal output before WP is loaded.
 	-->
 	<rule ref="WordPress.WP.AlternativeFunctions.file_system_operations_fwrite">
+		<exclude-pattern>*/tests/*</exclude-pattern>
+	</rule>
+	<rule ref="WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents">
 		<exclude-pattern>*/tests/*</exclude-pattern>
 	</rule>
 </ruleset>

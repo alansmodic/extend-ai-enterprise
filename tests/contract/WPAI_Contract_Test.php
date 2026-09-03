@@ -40,49 +40,36 @@ final class WPAI_Contract_Test extends WP_UnitTestCase {
 	}
 
 	/**
-	 * WordPress 7.1 lifecycle filters must exist for governance enforcement.
-	 * Rate_Limiter and Output_Moderator depend on these to enforce across all
-	 * execution paths (REST, MCP, WP-CLI, direct PHP).
+	 * WordPress 7.1 lifecycle filters must exist *in core*, not just as names we
+	 * can apply_filters() ourselves. Rate_Limiter and Output_Moderator depend on
+	 * WP_Ability::execute() actually calling these. Applying the filters from the
+	 * test would pass on any WordPress version and catch nothing.
 	 */
 	public function test_wordpress_7_1_lifecycle_filters_exist(): void {
-		$sentinel = new \WP_Filter_Sentinel();
-		$captured = null;
+		$this->assertTrue(
+			class_exists( \WP_Filter_Sentinel::class ),
+			'WP_Filter_Sentinel missing — WordPress older than 7.1; Rate_Limiter cannot distinguish pass-through from short-circuit.'
+		);
+		$this->assertTrue( class_exists( \WP_Ability::class ), 'WP_Ability missing — Abilities API is not loaded.' );
 
-		// wp_pre_execute_ability — short-circuit execution before validation.
-		$listener = static function ( $sent, string $ability_name, $input, $ability ) use ( &$captured, $sentinel ) {
-			$captured = compact( 'sent', 'ability_name', 'input', 'ability' );
-			return $sent;
-		};
-		add_filter( 'wp_pre_execute_ability', $listener, 99, 4 );
-		$result = apply_filters( 'wp_pre_execute_ability', $sentinel, 'test/ability', array( 'key' => 'value' ), null );
-		remove_filter( 'wp_pre_execute_ability', $listener, 99 );
-		$this->assertIsArray( $captured, 'wp_pre_execute_ability filter missing — Rate_Limiter cannot enforce universally.' );
-		$this->assertSame( $sentinel, $result, 'wp_pre_execute_ability must pass sentinel through when not short-circuited.' );
-		$this->assertSame( 'test/ability', $captured['ability_name'] );
+		$src = file_get_contents( ( new ReflectionClass( \WP_Ability::class ) )->getFileName() );
+		$this->assertIsString( $src );
 
-		// wp_ability_normalize_input — transform input after defaults, before validation.
-		$captured = null;
-		$listener = static function ( $input, string $ability_name, $ability ) use ( &$captured ) {
-			$captured = compact( 'input', 'ability_name', 'ability' );
-			return $input;
-		};
-		add_filter( 'wp_ability_normalize_input', $listener, 99, 3 );
-		apply_filters( 'wp_ability_normalize_input', array( 'test' => 'data' ), 'test/ability', null );
-		remove_filter( 'wp_ability_normalize_input', $listener, 99 );
-		$this->assertIsArray( $captured, 'wp_ability_normalize_input filter missing.' );
-		$this->assertSame( array( 'test' => 'data' ), $captured['input'] );
-
-		// wp_ability_execute_result — transform/moderate output before validation.
-		$captured = null;
-		$listener = static function ( $result, string $ability_name, $input, $ability ) use ( &$captured ) {
-			$captured = compact( 'result', 'ability_name', 'input', 'ability' );
-			return $result;
-		};
-		add_filter( 'wp_ability_execute_result', $listener, 99, 4 );
-		apply_filters( 'wp_ability_execute_result', 'result', 'test/ability', array(), null );
-		remove_filter( 'wp_ability_execute_result', $listener, 99 );
-		$this->assertIsArray( $captured, 'wp_ability_execute_result filter missing — Output_Moderator cannot enforce universally.' );
-		$this->assertSame( 'result', $captured['result'] );
+		$this->assertStringContainsString(
+			"apply_filters( 'wp_pre_execute_ability'",
+			$src,
+			'WP_Ability no longer applies wp_pre_execute_ability — Rate_Limiter cannot enforce universally.'
+		);
+		$this->assertStringContainsString(
+			"apply_filters( 'wp_ability_normalize_input'",
+			$src,
+			'WP_Ability no longer applies wp_ability_normalize_input.'
+		);
+		$this->assertStringContainsString(
+			"apply_filters( 'wp_ability_execute_result'",
+			$src,
+			'WP_Ability no longer applies wp_ability_execute_result — Output_Moderator cannot enforce universally.'
+		);
 	}
 
 	/** wpai_system_instruction must fire with ($instruction, $ability_name, $data). */
@@ -149,15 +136,36 @@ final class WPAI_Contract_Test extends WP_UnitTestCase {
 			'Prompt_Injector did not subscribe to the scoped hook — per-ability overrides are inert.'
 		);
 
+		// WP AI 1.3 fires this as apply_filters( $hook, $instruction, $data ) —
+		// two arguments, no ability name. Passing three was masking a TypeError
+		// that would fatal in PHP 8 when the real hook ran.
 		$this->assertSame(
 			'Custom title rules.',
 			apply_filters(
 				'wpai_title_generation_system_instruction',
 				'WP AI default.',
-				'ai/title-generation',
 				array()
 			),
 			'Scoped hook fired but the stored override was not applied.'
+		);
+	}
+
+	/**
+	 * Pin WP AI's scoped-filter *call site*, not just our subscription. If
+	 * upstream adds a third argument or drops $data, our closure TypeErrors
+	 * on every ability run.
+	 */
+	public function test_wp_ai_scoped_instruction_filter_call_site(): void {
+		$this->assertTrue(
+			class_exists( \WordPress\AI\Abstracts\Abstract_Ability::class ),
+			'WP AI Abstract_Ability missing — cannot pin the scoped filter contract.'
+		);
+		$src = file_get_contents( ( new ReflectionClass( \WordPress\AI\Abstracts\Abstract_Ability::class ) )->getFileName() );
+		$this->assertIsString( $src );
+		$this->assertMatchesRegularExpression(
+			'/apply_filters\(\s*"wpai_\{\$this->get_ability_slug\(\)\}_system_instruction",\s*\$instruction,\s*\$data\s*\)/',
+			$src,
+			'WP AI scoped system_instruction filter signature drifted — Prompt_Injector will TypeError on every override.'
 		);
 	}
 
@@ -257,36 +265,53 @@ final class WPAI_Contract_Test extends WP_UnitTestCase {
 	 * OPEN), so a typo'd ID disables the restriction without any error. This is
 	 * the guard that would have caught `ai/generate-image` vs `ai/image-generation`.
 	 *
-	 * Registration is brittle in the PHPUnit scaffold (see
-	 * test_wp_ai_subscribes_to_abilities_api_init) — when nothing registers we
-	 * SKIP rather than fail, so this never flakes red; the Studio smoke-test
-	 * covers the end-to-end path. It still catches a wrong ID whenever
-	 * registration succeeds.
+	 * Bootstrap defines WPAI_IS_TEST so WP AI boots without built assets, and
+	 * enables the relevant features before init. An empty registry is a real
+	 * failure — skipping here is how `ai/comment-moderation` (the real id is
+	 * `ai/comment-analysis`) survived into 0.2.
 	 */
 	public function test_governance_ability_ids_are_registered(): void {
-		do_action( 'wp_abilities_api_categories_init' );
-		do_action( 'wp_abilities_api_init' );
+		$this->assertTrue( function_exists( 'wp_get_abilities' ), 'Abilities API unavailable.' );
 
-		if ( ! function_exists( 'wp_get_abilities' ) ) {
-			$this->markTestSkipped( 'Abilities API unavailable in this scaffold run.' );
+		// Force the lazy WP_Abilities_Registry singleton to fire wp_abilities_api_init
+		// if nothing has asked for it yet this request.
+		if ( function_exists( 'wp_get_ability_categories' ) ) {
+			wp_get_ability_categories();
 		}
+		wp_get_abilities();
 
 		$registered = array_map(
 			static fn( $ability ) => method_exists( $ability, 'get_name' ) ? (string) $ability->get_name() : '',
 			(array) wp_get_abilities()
 		);
 
-		// Filter to the WP AI namespace so an empty registry (scaffold didn't
-		// register) skips instead of failing on every key.
-		$ai_abilities = array_filter( $registered, static fn( $id ) => str_starts_with( (string) $id, 'ai/' ) );
+		$ai_abilities = array_values(
+			array_filter( $registered, static fn( $id ) => str_starts_with( (string) $id, 'ai/' ) )
+		);
+
 		if ( $ai_abilities === array() ) {
-			$this->markTestSkipped( 'No ai/* abilities registered in this scaffold run — Studio smoke-test covers registration.' );
+			// Registry singleton may have fired wp_abilities_api_init before WP AI
+			// hooked it (init:15). Re-fire so late subscribers can register.
+			do_action( 'wp_abilities_api_categories_init' );
+			do_action( 'wp_abilities_api_init' );
+			$registered   = array_map(
+				static fn( $ability ) => method_exists( $ability, 'get_name' ) ? (string) $ability->get_name() : '',
+				(array) wp_get_abilities()
+			);
+			$ai_abilities = array_values(
+				array_filter( $registered, static fn( $id ) => str_starts_with( (string) $id, 'ai/' ) )
+			);
 		}
+
+		$this->assertNotEmpty(
+			$ai_abilities,
+			'No ai/* abilities registered. WP AI likely failed its Requirements check (assets / wp_supports_ai). Governance ID drift will fail open.'
+		);
 
 		// IDs our governance maps depend on. Keep in sync with
 		// Access\Role_Gate::DEFAULT_MAP and REST\Admin_Controller's label map.
 		$required = array(
-			'ai/comment-moderation',
+			'ai/comment-analysis',
 			'ai/image-generation',
 			'ai/image-prompt-generation',
 			'ai/alt-text-generation',

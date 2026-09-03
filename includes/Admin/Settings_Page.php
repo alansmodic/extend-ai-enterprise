@@ -96,7 +96,7 @@ final class Settings_Page {
 								echo esc_textarea( (string) get_option( 'extend_ai_policy_preamble', '' ) );
 							?>
 							</textarea>
-							<p class="description"><?php esc_html_e( 'Prepended to every AI ability prompt, after any per-ability override.', 'extend-ai-enterprise' ); ?></p>
+							<p class="description"><?php esc_html_e( 'Prepended to every AI ability prompt via the global wpai_system_instruction filter, which runs before per-ability overrides. A replace-mode override therefore drops this preamble.', 'extend-ai-enterprise' ); ?></p>
 						</td>
 					</tr>
 					<tr>

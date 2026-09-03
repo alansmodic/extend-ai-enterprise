@@ -54,6 +54,13 @@ if ( ! $_ai_plugin || ! file_exists( $_ai_plugin ) ) {
 
 $_self_plugin = dirname( __DIR__ ) . '/extend-ai-enterprise.php';
 
+// WP AI's Requirements check refuses to boot without built JS assets unless this
+// constant is set. Our contract suite only needs PHP-side filters and ability
+// registration, so skip the asset gate the same way WP AI's own tests do.
+if ( ! defined( 'WPAI_IS_TEST' ) ) {
+	define( 'WPAI_IS_TEST', true );
+}
+
 tests_add_filter(
 	'muplugins_loaded',
 	static function () use ( $_ai_plugin, $_self_plugin ): void {
