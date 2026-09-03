@@ -113,13 +113,13 @@ final class WPAI_Contract_Test extends WP_UnitTestCase {
 			$captured = compact( 'instruction', 'ability_name', 'data' );
 			return $instruction;
 		};
-		
+
 		// Test that the per-ability filter pattern works (if WP AI 1.3+ is running).
 		// We fire the filter ourselves since we don't have full WP AI bootstrap in tests.
 		add_filter( 'wpai_title_generation_system_instruction', $listener, 99, 3 );
 		$result = apply_filters( 'wpai_title_generation_system_instruction', 'title instruction', 'ai/title-generation', array() );
 		remove_filter( 'wpai_title_generation_system_instruction', $listener, 99 );
-		
+
 		$this->assertIsArray( $captured, 'Per-ability filter pattern not wired (expected in WP AI 1.3+).' );
 		$this->assertSame( 'title instruction', $result );
 		$this->assertSame( 'title instruction', $captured['instruction'] );
