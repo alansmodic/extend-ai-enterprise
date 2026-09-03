@@ -93,9 +93,9 @@ You land on **Tools → AI Enterprise**. From there:
 | **PII redaction**               | Pattern-based redaction of email, SSN, phone numbers from inputs before they leave WordPress.       |
 | **Role-based access**           | Per-ability allowlist of WP roles. Disable specific experiments per-role or globally.               |
 | **Credential delegation**       | Hand off credential resolution to an enterprise vault (AWS Secrets Manager, HashiCorp Vault, SSO).  |
-| **Rate limiting**               | Per-minute and per-day quotas per user, enforced at the REST layer (no provider spend on rejected). |
-| **Cost tracking + caps**        | Per-user monthly spend rollup in a dedicated table. Hard cap denies all AI abilities once a user is over budget (admins exempt). |
-| **Output moderation**           | Banned-phrase scan on every ability response. Pluggable backend for richer moderation.              |
+| **Rate limiting**               | Per-minute and per-day quotas per user, enforced at the ability execution layer (WordPress 7.1 `wp_pre_execute_ability` filter) for all paths: REST, MCP, WP-CLI, and direct PHP. No provider spend on rejected requests. |
+| **Cost tracking + caps**        | Per-user monthly spend rollup in a dedicated table. Hard cap denies all AI abilities once a user is over budget (admins exempt). Universal enforcement via `user_has_cap`. |
+| **Output moderation**           | Banned-phrase scan on every ability response before it returns to the caller (WordPress 7.1 `wp_ability_execute_result` filter). Pluggable backend for richer moderation. Applies to all execution paths. |
 | **Audit retention**             | Sets the WP AI log retention via its own filter. Separate cron for our usage table.                 |
 | **Drift detection**             | Version pin + admin notice when running outside the tested WP AI range.                             |
 | **Wrap-failure telemetry**      | Action + admin notice when the transporter wrap fails so silent governance gaps get loud.           |
@@ -104,32 +104,39 @@ You land on **Tools → AI Enterprise**. From there:
 
 ## How it works
 
-We hook the WordPress AI plugin's **public extension points** — never its
-internals. Six categories of hook:
+We hook the WordPress AI plugin's **public extension points** and **WordPress 7.1
+Abilities API lifecycle filters** — never internals. Seven categories of hook:
 
 ```
 ┌───────────────────────────────────────────────────────────────────────┐
-│  WordPress AI plugin                                                  │
+│  WordPress 7.1 Abilities API + WordPress AI plugin                   │
 │                                                                       │
-│   Ability runs ──► wpai_pre_normalize_content   (input scrubbing)     │
+│   Ability runs ──► wp_pre_execute_ability       (rate limiting)       │
+│                ──► wpai_pre_normalize_content   (input scrubbing)     │
 │                ──► wpai_system_instruction      (prompt shaping)      │
 │                ──► wpai_preferred_*_models      (model selection)     │
 │                ──► wpai_has_ai_credentials      (credential probe)    │
+│                ──► wp_ability_execute_result    (output moderation)   │
 │                ──► AiClient::defaultRegistry()->setHttpTransporter()  │
-│                ──► /wp-abilities/v1/{ability}   (REST invocation)     │
-└─────┬─────────────────┬───────────────┬──────────────┬──────────────┘
-      │                 │               │              │
-      ▼                 ▼               ▼              ▼
-  PII_Redactor     Prompt_Injector  Model_Allowlist  Credential_Vault
-  Output_Moderator Prompt_Library                    Rate_Limiter
-                                                     Transporter_Wrap
-                                                          │
-                                                          ▼
-                                                  extend_ai_request_completed
-                                                          │
-                                                          ▼
-                                                     Cost_Tracker → wp_extend_ai_usage
+└─────┬─────────────┬───────────────┬──────────────┬──────────────┬─────┘
+      │             │               │              │              │
+      ▼             ▼               ▼              ▼              ▼
+ Rate_Limiter  PII_Redactor   Prompt_Injector  Model_Allowlist  Output_Moderator
+               Guidelines_Bridge  Prompt_Library  Credential_Vault
+                                                  Cost_Tracker
+                                                  Transporter_Wrap
+                                                       │
+                                                       ▼
+                                               extend_ai_request_completed
+                                                       │
+                                                       ▼
+                                                  wp_extend_ai_usage
 ```
+
+**Universal enforcement:** Rate limiting (`wp_pre_execute_ability`), output
+moderation (`wp_ability_execute_result`), and spend caps (`user_has_cap`) enforce
+on **all execution paths** — REST API, MCP servers, WP-CLI commands, and direct
+PHP `WP_Ability::execute()` calls. No bypass routes exist.
 
 Two custom tables back the moving parts:
 
@@ -202,10 +209,10 @@ style advice.
 
 ### Prerequisites
 
-- WordPress 6.6 or newer
+- WordPress 7.1 or newer (for universal governance enforcement via lifecycle filters)
 - PHP 8.1 or newer
-- [WordPress AI plugin](https://wordpress.org/plugins/ai/) — the **1.0.x**
-  compatibility band. Pin-tested on v1.0.0 and v1.0.1; patch releases within the
+- [WordPress AI plugin](https://wordpress.org/plugins/ai/) — the **1.3.x**
+  compatibility band. Tested on v1.3.0; patch releases within the
   band are expected to work (see `Compat\Version_Gate::TESTED_MAX`)
 
 ### From source
@@ -376,7 +383,7 @@ extend-ai-enterprise/
 2. **Transporter_Wrap** — installs decorator on `AiClient::defaultRegistry()` at `wp_loaded:20` and `admin_init:20` (after upstream's wrap at priority 1). Emits `extend_ai_request_completed` for every provider call.
 3. **Policy modules** — register their filters on the AI plugin's documented hooks.
 4. **Access modules** — register role gates and credential delegation.
-5. **Governance modules** — subscribe to `extend_ai_request_completed`, register REST pre/post dispatch filters, schedule cron.
+5. **Governance modules** — subscribe to WordPress 7.1 Abilities API lifecycle filters (`wp_pre_execute_ability`, `wp_ability_execute_result`), `user_has_cap`, and `extend_ai_request_completed`. Schedule cron.
 6. **Admin** — REST controller + Tools pages + script enqueue.
 
 ---

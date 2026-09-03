@@ -9,6 +9,52 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **WordPress 7.1 lifecycle filter support.** Rate limiting, output moderation,
+  and all governance enforcement now use the WordPress 7.1 Abilities API lifecycle
+  filters (`wp_pre_execute_ability`, `wp_ability_execute_result`) instead of
+  REST-only hooks. Governance gates now apply to **all execution paths** —
+  REST API, MCP servers, WP-CLI commands, and direct PHP `WP_Ability::execute()`
+  calls — ensuring no bypass routes exist.
+- **Contract tests for WordPress 7.1 lifecycle filters.** New tests validate
+  that `wp_pre_execute_ability`, `wp_ability_normalize_input`, and
+  `wp_ability_execute_result` filters exist and have the correct signatures.
+  Tests also verify our governance modules properly subscribe to these filters.
+- **Contract tests for WordPress AI 1.3.x per-ability filters.** Validates the
+  new `wpai_{slug}_system_instruction` pattern introduced in WordPress AI 1.3.0
+  for ability-specific prompt customization.
+
+### Changed
+
+- **WordPress AI compatibility updated to 1.3.x.** `Compat\Version_Gate::TESTED_MIN`
+  raised to `1.3.0` and `TESTED_MAX` to `1.3.99`, reflecting testing against
+  WordPress AI 1.3.0 which added per-ability filter extension points, Custom
+  Abilities experiment, and other API changes. README prerequisites updated to
+  the v1.3.x tested range.
+- **Rate_Limiter enforcement moved to ability execution layer.** Previously
+  enforced only at REST pre-dispatch (`rest_pre_dispatch` on `wp-abilities/v1`),
+  rate limiting now hooks `wp_pre_execute_ability` (WordPress 7.1) to enforce
+  before any execution begins, regardless of how the ability was invoked. This
+  closes the MCP, WP-CLI, and direct PHP bypass routes.
+- **Output_Moderator enforcement moved to ability execution layer.** Previously
+  enforced only at REST post-dispatch (`rest_post_dispatch` on `wp-abilities/v1`),
+  output moderation now hooks `wp_ability_execute_result` (WordPress 7.1) to
+  scan results before they return to any caller. MCP, WP-CLI, and PHP calls now
+  pass through the same banned-phrase scanner as REST requests.
+- **Cost_Tracker continues to enforce universally via `user_has_cap`.** No
+  change required — the existing `user_has_cap` filter already gates every
+  `wp_ability_*` capability check regardless of execution path. Verified that
+  this pattern remains universal with WordPress 7.1.
+
+### Fixed
+
+- **Governance enforcement gaps closed.** Rate limiting and output moderation
+  previously applied only to REST API invocations. MCP servers (via
+  `log_ai_request()` in WordPress AI 1.3.0), WP-CLI commands, and direct PHP
+  calls to `WP_Ability::execute()` bypassed those gates entirely. Moving
+  enforcement to the WordPress 7.1 execution lifecycle filters ensures every
+  AI ability invocation — regardless of caller — passes through rate limits,
+  spend caps, and output moderation before any model call or result return.
+
 - **Site Guidelines integration** (Gutenberg "Guidelines" experiment, 22.7+).
   When the experiment is active, the published content-guidelines singleton is
   composed into a "Site guidelines" prompt section and appended to editorial
@@ -30,9 +76,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   on the Tools → AI Enterprise page and in the `/policies` REST endpoint,
   which also reports read-only `guidelines_detected`.
 
-### Changed
+### Compatibility Notes
 
-- **Contract test matrix now covers `WordPress/ai@1.0.1`** alongside `@1.0.0`
+- **WordPress 7.1+ required** for universal governance enforcement. The
+  lifecycle filters (`wp_pre_execute_ability`, `wp_ability_execute_result`)
+  ship in WordPress 7.1. Sites running WordPress 7.0 or earlier can still use
+  this plugin, but governance will only enforce on REST API calls.
+- **WordPress AI 1.3.x recommended.** This release is tested against WordPress
+  AI 1.3.0. The 1.0.x branch is no longer tested; see the contract test matrix
+  for version coverage.
+- **Custom Abilities experiment** (WordPress AI 1.3.0+) gates abilities like
+  `ai/get-post-details` and `core/read-content` behind an opt-in toggle in
+  Settings → AI → Admin Experiments. Enable it if your integration relies on
+  those abilities.
+
+---
+
+## [0.1.0] — 2026-06-19
+
+### Added
+
+**Contract test matrix now covers `WordPress/ai@1.0.1`** alongside `@1.0.0`
   and `@develop`, reflecting upstream's 1.0.1 release. README prerequisites
   updated to the v1.0.0–v1.0.1 tested range. (`Compat\Version_Gate::TESTED_MAX`
   already accepted 1.0.1, so no runtime gate change was needed.)

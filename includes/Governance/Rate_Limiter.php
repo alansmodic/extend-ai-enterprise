@@ -2,9 +2,11 @@
 /**
  * Per-user / per-feature rate limiting and burst control.
  *
- * Strategy: intercept ability invocation via REST pre-dispatch on the Abilities API
- * namespace (`wp-abilities/v1`). Bucket counts in transients; reject with 429 once
- * exceeded. This is enforced *before* a model call is made — no provider spend.
+ * Strategy: intercept ability execution via the WordPress 7.1 wp_pre_execute_ability
+ * lifecycle filter. This enforces limits for all execution paths — REST, MCP, WP-CLI,
+ * and direct WP_Ability::execute() calls — before any model call is made. Bucket
+ * counts are stored in transients; exceed the limit and execution short-circuits
+ * with a WP_Error.
  *
  * @package ExtendAI\Enterprise
  */
@@ -15,29 +17,29 @@ namespace ExtendAI\Enterprise\Governance;
 
 final class Rate_Limiter {
 
-	private const NS = 'wp-abilities/v1';
-
 	public function register(): void {
-		add_filter( 'rest_pre_dispatch', array( $this, 'enforce' ), 10, 3 );
+		add_filter( 'wp_pre_execute_ability', array( $this, 'enforce' ), 10, 4 );
 	}
 
 	/**
-	 * @param mixed            $result  Existing short-circuit result (or null).
-	 * @param \WP_REST_Server  $server
-	 * @param \WP_REST_Request $request
+	 * Enforce per-user rate limits before ability execution begins.
+	 *
+	 * @param \WP_Filter_Sentinel $sentinel     The sentinel instance. Must return this unchanged to pass.
+	 * @param string              $ability_name The ability being executed (e.g. 'ai/title-generation').
+	 * @param mixed               $input        Normalized input (not yet validated).
+	 * @param \WP_Ability         $ability      The ability instance.
+	 * @return \WP_Filter_Sentinel|\WP_Error Sentinel to proceed, WP_Error to short-circuit.
 	 */
-	public function enforce( $result, $server, $request ) {
-		if ( null !== $result ) {
-			return $result;
-		}
-		$route = (string) $request->get_route();
-		if ( ! str_contains( $route, self::NS ) ) {
-			return $result;
+	public function enforce( $sentinel, string $ability_name, $input, $ability ) {
+		unset( $input, $ability );
+
+		// Only enforce for AI abilities, not arbitrary WordPress abilities.
+		if ( ! str_starts_with( $ability_name, 'ai/' ) ) {
+			return $sentinel;
 		}
 
-		$user_id    = get_current_user_id();
-		$ability_id = $this->route_to_ability( $route );
-		$limits     = $this->limits();
+		$user_id = get_current_user_id();
+		$limits  = $this->limits();
 
 		foreach ( array(
 			'minute' => 60,
@@ -47,7 +49,7 @@ final class Rate_Limiter {
 			if ( $max <= 0 ) {
 				continue;
 			}
-			$key   = sprintf( 'extai_rl_%s_%d_%s', $window, $user_id, md5( $ability_id ) );
+			$key   = sprintf( 'extai_rl_%s_%d_%s', $window, $user_id, md5( $ability_name ) );
 			$count = (int) get_transient( $key );
 			if ( $count >= $max ) {
 				return new \WP_Error(
@@ -59,14 +61,7 @@ final class Rate_Limiter {
 			set_transient( $key, $count + 1, $ttl );
 		}
 
-		return $result;
-	}
-
-	private function route_to_ability( string $route ): string {
-		// `/wp-abilities/v1/ai/title-generation/run` → `ai/title-generation`.
-		$tail = preg_replace( '#^/' . self::NS . '/#', '', $route ) ?? '';
-		$tail = preg_replace( '#/(run|describe).*$#', '', $tail ) ?? $tail;
-		return (string) $tail;
+		return $sentinel;
 	}
 
 	/** @return array<string,int> */

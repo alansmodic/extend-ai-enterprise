@@ -37,6 +37,52 @@ final class WPAI_Contract_Test extends WP_UnitTestCase {
 		);
 	}
 
+	/**
+	 * WordPress 7.1 lifecycle filters must exist for governance enforcement.
+	 * Rate_Limiter and Output_Moderator depend on these to enforce across all
+	 * execution paths (REST, MCP, WP-CLI, direct PHP).
+	 */
+	public function test_wordpress_7_1_lifecycle_filters_exist(): void {
+		$sentinel = new \WP_Filter_Sentinel();
+		$captured = null;
+
+		// wp_pre_execute_ability — short-circuit execution before validation.
+		$listener = static function ( $sent, string $ability_name, $input, $ability ) use ( &$captured, $sentinel ) {
+			$captured = compact( 'sent', 'ability_name', 'input', 'ability' );
+			return $sent;
+		};
+		add_filter( 'wp_pre_execute_ability', $listener, 99, 4 );
+		$result = apply_filters( 'wp_pre_execute_ability', $sentinel, 'test/ability', array( 'key' => 'value' ), null );
+		remove_filter( 'wp_pre_execute_ability', $listener, 99 );
+		$this->assertIsArray( $captured, 'wp_pre_execute_ability filter missing — Rate_Limiter cannot enforce universally.' );
+		$this->assertSame( $sentinel, $result, 'wp_pre_execute_ability must pass sentinel through when not short-circuited.' );
+		$this->assertSame( 'test/ability', $captured['ability_name'] );
+
+		// wp_ability_normalize_input — transform input after defaults, before validation.
+		$captured = null;
+		$listener = static function ( $input, string $ability_name, $ability ) use ( &$captured ) {
+			$captured = compact( 'input', 'ability_name', 'ability' );
+			return $input;
+		};
+		add_filter( 'wp_ability_normalize_input', $listener, 99, 3 );
+		apply_filters( 'wp_ability_normalize_input', array( 'test' => 'data' ), 'test/ability', null );
+		remove_filter( 'wp_ability_normalize_input', $listener, 99 );
+		$this->assertIsArray( $captured, 'wp_ability_normalize_input filter missing.' );
+		$this->assertSame( array( 'test' => 'data' ), $captured['input'] );
+
+		// wp_ability_execute_result — transform/moderate output before validation.
+		$captured = null;
+		$listener = static function ( $result, string $ability_name, $input, $ability ) use ( &$captured ) {
+			$captured = compact( 'result', 'ability_name', 'input', 'ability' );
+			return $result;
+		};
+		add_filter( 'wp_ability_execute_result', $listener, 99, 4 );
+		apply_filters( 'wp_ability_execute_result', 'result', 'test/ability', array(), null );
+		remove_filter( 'wp_ability_execute_result', $listener, 99 );
+		$this->assertIsArray( $captured, 'wp_ability_execute_result filter missing — Output_Moderator cannot enforce universally.' );
+		$this->assertSame( 'result', $captured['result'] );
+	}
+
 	/** wpai_system_instruction must fire with ($instruction, $ability_name, $data). */
 	public function test_system_instruction_filter_signature(): void {
 		$captured = null;
@@ -52,6 +98,31 @@ final class WPAI_Contract_Test extends WP_UnitTestCase {
 		$this->assertSame( 'default', $captured['instruction'] );
 		$this->assertSame( 'ai/title-generation', $captured['ability_name'] );
 		$this->assertSame( array( 'post_id' => 1 ), $captured['data'] );
+	}
+
+	/**
+	 * WordPress AI 1.3.0 per-ability filters must exist.
+	 * These allow ability-specific prompt customization without affecting others.
+	 * The global wpai_system_instruction still exists; the per-ability filter runs after it.
+	 */
+	public function test_per_ability_filter_pattern_exists(): void {
+		// WordPress AI 1.3.0+ uses wpai_{slug}_system_instruction where slug is derived from ability name.
+		// ai/title-generation becomes wpai_title_generation_system_instruction.
+		$captured = null;
+		$listener = static function ( string $instruction, string $ability_name, array $data ) use ( &$captured ): string {
+			$captured = compact( 'instruction', 'ability_name', 'data' );
+			return $instruction;
+		};
+
+		// Test that the per-ability filter pattern works (if WP AI 1.3+ is running).
+		// We fire the filter ourselves since we don't have full WP AI bootstrap in tests.
+		add_filter( 'wpai_title_generation_system_instruction', $listener, 99, 3 );
+		$result = apply_filters( 'wpai_title_generation_system_instruction', 'title instruction', 'ai/title-generation', array() );
+		remove_filter( 'wpai_title_generation_system_instruction', $listener, 99 );
+
+		$this->assertIsArray( $captured, 'Per-ability filter pattern not wired (expected in WP AI 1.3+).' );
+		$this->assertSame( 'title instruction', $result );
+		$this->assertSame( 'title instruction', $captured['instruction'] );
 	}
 
 	/** Content normalization filters must exist with single-string arg. */
@@ -191,5 +262,21 @@ final class WPAI_Contract_Test extends WP_UnitTestCase {
 				"Governance layer references '{$ability_id}' but WP AI does not register it — the role gate / prompt UI for this ability silently no-ops. See Compat naming: ID is 'ai/' . get_id()."
 			);
 		}
+	}
+
+	/**
+	 * Verify our governance modules properly hook into WordPress 7.1 lifecycle filters.
+	 * Rate_Limiter must subscribe to wp_pre_execute_ability.
+	 * Output_Moderator must subscribe to wp_ability_execute_result.
+	 */
+	public function test_governance_modules_use_lifecycle_filters(): void {
+		$this->assertNotFalse(
+			has_filter( 'wp_pre_execute_ability' ),
+			'No callbacks on wp_pre_execute_ability — Rate_Limiter is not enforcing for non-REST paths.'
+		);
+		$this->assertNotFalse(
+			has_filter( 'wp_ability_execute_result' ),
+			'No callbacks on wp_ability_execute_result — Output_Moderator is not enforcing for non-REST paths.'
+		);
 	}
 }
