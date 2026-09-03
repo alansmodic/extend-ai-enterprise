@@ -52,17 +52,17 @@ final class Prompt_Injector {
 	}
 
 	/**
-	 * Register per-ability filters for abilities with prompt overrides.
-	 * Called on wp_abilities_api_init so we can enumerate registered abilities.
+	 * Register a scoped filter for each ability that currently has an override.
+	 *
+	 * Runs on wp_abilities_api_init so WP AI's abilities (and therefore its
+	 * `wpai_{slug}_system_instruction` hooks) exist by the time we subscribe.
 	 */
 	public function register_per_ability_filters(): void {
-		// Get all abilities that have prompt overrides.
-		global $wpdb;
-		$table     = $wpdb->prefix . 'extend_ai_prompts';
-		$abilities = $wpdb->get_col( "SELECT ability_id FROM {$table}" );
-
-		foreach ( $abilities as $ability_id ) {
-			$slug = $this->ability_to_slug( $ability_id );
+		foreach ( array_keys( $this->library->all() ) as $ability_id ) {
+			$slug = self::ability_to_slug( (string) $ability_id );
+			if ( '' === $slug ) {
+				continue;
+			}
 			add_filter( "wpai_{$slug}_system_instruction", array( $this, 'inject_per_ability_override' ), 10, 3 );
 		}
 	}
@@ -146,10 +146,19 @@ final class Prompt_Injector {
 	}
 
 	/**
-	 * Convert ability ID to slug for filter name.
-	 * ai/title-generation → title_generation
+	 * Derive WP AI's hook-safe slug from an ability name.
+	 *
+	 * Mirrors the slug helper WP AI 1.3 added in Abstract_Ability (#770): drop the
+	 * namespace, then collapse every non-alphanumeric run to a single underscore.
+	 * `ai/title-generation` → `title_generation` → `wpai_title_generation_system_instruction`.
+	 *
+	 * Public and static so the contract suite can pin the derivation directly — a
+	 * wrong slug means our filter subscribes to a hook nothing ever fires, which
+	 * fails silently.
 	 */
-	private function ability_to_slug( string $ability_id ): string {
-		return str_replace( array( 'ai/', '/' ), array( '', '_' ), $ability_id );
+	public static function ability_to_slug( string $ability_id ): string {
+		$name = (string) preg_replace( '#^[^/]+/#', '', trim( $ability_id ) );
+		$slug = (string) preg_replace( '/[^a-z0-9]+/i', '_', $name );
+		return strtolower( trim( $slug, '_' ) );
 	}
 }
