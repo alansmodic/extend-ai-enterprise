@@ -79,7 +79,11 @@ _Nothing yet._
   pins the derivation against the documented ability names, and
   `test_override_subscribes_to_scoped_hook_and_applies` seeds a real override and
   asserts it both lands on the correctly named hook and transforms the
-  instruction.
+  instruction under WP AI's actual 2-arg signature.
+- **0.1 → 0.2 stored-state upgrader.** `Compat\Upgrader` runs on boot (WordPress
+  does not fire the activation hook on updates): drops `extend_ai_use_guidelines`,
+  rewrites `{guidelines*}` out of stored templates, and renames
+  `ai/comment-moderation` overrides / role-map keys to `ai/comment-analysis`.
 - **CI matrix updated to WordPress AI 1.3.0.** `.github/workflows/contract.yml`
   now tests against WordPress AI 1.3.0 and develop (removed 1.0.0/1.0.1).
 
@@ -103,17 +107,28 @@ _Nothing yet._
 
 ### Fixed
 
-- **Per-ability prompt overrides never applied.** `ability_to_slug()` stripped the
-  `ai/` namespace but left hyphens intact, producing
+- **Per-ability prompt overrides never applied.** Two stacked bugs: `ability_to_slug()`
+  stripped the `ai/` namespace but left hyphens intact, producing
   `wpai_title-generation_system_instruction` where WP AI fires
-  `wpai_title_generation_system_instruction`. Every override subscribed to a
-  non-existent hook and silently did nothing. Derivation now matches WP AI's
-  helper: drop the namespace, collapse non-alphanumeric runs to underscores,
-  lowercase.
+  `wpai_title_generation_system_instruction`; and the callback was registered
+  with the global-filter signature `($instruction, $ability_name, $data)` even
+  though WP AI 1.3's scoped hook is `apply_filters( $hook, $instruction, $data )`.
+  PHP 8 would TypeError on the array `$data` payload the first time an override
+  ran. Derivation now matches WP AI's helper, and the callback captures the
+  ability id in a 2-arg closure. A contract test pins WP AI's call site so a
+  signature drift fails CI instead of production.
+- **Role gate for comment analysis failed open.** `Role_Gate` and the prompt-UI
+  fallback map keyed `ai/comment-moderation`; WP AI registers the ability as
+  `ai/comment-analysis` (the *feature* id is still `comment-moderation`). An
+  unmatched key is treated as "not configured", so the restriction never
+  applied. The 0.1→0.2 upgrader renames stored overrides and role-map entries.
 - **Stale `{guidelines*}` variables advertised in the prompt editor.** The help
   text still listed `{guidelines}`, `{guidelines_copy}` and friends after the
   bridge was deleted. Nothing defined them, and unresolved placeholders are left
   verbatim in the template, so they were being sent to the model as literal text.
+  The 0.2 upgrader strips those placeholders from stored templates (and deletes
+  an override that would become empty) and drops the leftover
+  `extend_ai_use_guidelines` option.
 - **Governance enforcement gaps closed.** Rate limiting and output moderation
   previously applied only to REST API invocations. MCP servers (via
   `log_ai_request()` in WordPress AI 1.3.0), WP-CLI commands, and direct PHP

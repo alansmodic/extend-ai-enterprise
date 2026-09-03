@@ -59,16 +59,28 @@ final class Prompt_Injector {
 	 */
 	public function register_per_ability_filters(): void {
 		foreach ( array_keys( $this->library->all() ) as $ability_id ) {
-			$slug = self::ability_to_slug( (string) $ability_id );
+			$ability_id = (string) $ability_id;
+			$slug       = self::ability_to_slug( $ability_id );
 			if ( '' === $slug ) {
 				continue;
 			}
-			add_filter( "wpai_{$slug}_system_instruction", array( $this, 'inject_per_ability_override' ), 10, 3 );
+			// WP AI 1.3 fires this hook as apply_filters( $hook, $instruction, $data )
+			// — two args, no ability name. Capture the id so the callback can look
+			// up the override without a TypeError on the array $data payload.
+			add_filter(
+				"wpai_{$slug}_system_instruction",
+				fn( string $instruction, array $data ): string => $this->inject_per_ability_override( $instruction, $ability_id, $data ),
+				10,
+				2
+			);
 		}
 	}
 
 	/**
 	 * Apply per-ability prompt override using the native per-ability filter.
+	 *
+	 * Called from the closure registered in register_per_ability_filters(); not
+	 * a filter callback itself. WP AI's scoped hook is ( $instruction, $data ).
 	 *
 	 * @param string              $instruction  Default system instruction from the ability.
 	 * @param string              $ability_name e.g. "ai/title-generation".

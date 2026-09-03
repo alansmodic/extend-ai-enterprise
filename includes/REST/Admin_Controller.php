@@ -248,7 +248,7 @@ final class Admin_Controller {
 				'ai/summarization'           => 'Summarization',
 				'ai/content-classification'  => 'Content classification',
 				'ai/content-resizing'        => 'Content resizing',
-				'ai/comment-moderation'      => 'Comment moderation',
+				'ai/comment-analysis'        => 'Comment analysis',
 				'ai/alt-text-generation'     => 'Image alt text',
 				'ai/image-generation'        => 'Image generation',
 				'ai/image-prompt-generation' => 'Image prompt generation',
