@@ -86,43 +86,39 @@ You land on **Tools → AI Enterprise**. From there:
 
 | Concern                         | Capability                                                                                          |
 | ------------------------------- | --------------------------------------------------------------------------------------------------- |
-| **Per-ability prompt control**  | Override any of the 11+ built-in ability prompts. Prepend, append, or replace. Variable interpolation. Version history per edit. |
+| **Per-ability prompt control**  | Override any of the 11+ built-in ability prompts using WordPress AI 1.3's native per-ability filters. Prepend, append, or replace. Variable interpolation. Version history per edit. |
 | **Site-wide policy preamble**   | Inject brand voice / compliance language ahead of every AI call.                                    |
-| **Site Guidelines integration** | When the Gutenberg "Guidelines" experiment is active, review notes are generated against the site's own published standards. Auto-detected; silent no-op everywhere else. |
 | **Model allowlist**             | Restrict the AI plugin to an approved set of provider/model pairs for text, image, and vision.      |
 | **PII redaction**               | Pattern-based redaction of email, SSN, phone numbers from inputs before they leave WordPress.       |
 | **Role-based access**           | Per-ability allowlist of WP roles. Disable specific experiments per-role or globally.               |
-| **Credential delegation**       | Hand off credential resolution to an enterprise vault (AWS Secrets Manager, HashiCorp Vault, SSO).  |
 | **Rate limiting**               | Per-minute and per-day quotas per user, enforced at the ability execution layer (WordPress 7.1 `wp_pre_execute_ability` filter) for all paths: REST, MCP, WP-CLI, and direct PHP. No provider spend on rejected requests. |
 | **Cost tracking + caps**        | Per-user monthly spend rollup in a dedicated table. Hard cap denies all AI abilities once a user is over budget (admins exempt). Universal enforcement via `user_has_cap`. |
 | **Output moderation**           | Banned-phrase scan on every ability response before it returns to the caller (WordPress 7.1 `wp_ability_execute_result` filter). Pluggable backend for richer moderation. Applies to all execution paths. |
-| **Audit retention**             | Sets the WP AI log retention via its own filter. Separate cron for our usage table.                 |
 | **Drift detection**             | Version pin + admin notice when running outside the tested WP AI range.                             |
-| **Wrap-failure telemetry**      | Action + admin notice when the transporter wrap fails so silent governance gaps get loud.           |
 
 ---
 
 ## How it works
 
-We hook the WordPress AI plugin's **public extension points** and **WordPress 7.1
-Abilities API lifecycle filters** — never internals. Seven categories of hook:
+We hook WordPress AI 1.3's **native per-ability filters** and **WordPress 7.1
+Abilities API lifecycle filters** — never internals. Clean integration via public APIs:
 
 ```
 ┌───────────────────────────────────────────────────────────────────────┐
-│  WordPress 7.1 Abilities API + WordPress AI plugin                   │
+│  WordPress 7.1 Abilities API + WordPress AI 1.3 plugin               │
 │                                                                       │
 │   Ability runs ──► wp_pre_execute_ability       (rate limiting)       │
 │                ──► wpai_pre_normalize_content   (input scrubbing)     │
-│                ──► wpai_system_instruction      (prompt shaping)      │
+│                ──► wpai_system_instruction      (policy preamble)     │
+│                ──► wpai_{slug}_system_instruction (prompt overrides)  │
 │                ──► wpai_preferred_*_models      (model selection)     │
-│                ──► wpai_has_ai_credentials      (credential probe)    │
 │                ──► wp_ability_execute_result    (output moderation)   │
 │                ──► AiClient::defaultRegistry()->setHttpTransporter()  │
 └─────┬─────────────┬───────────────┬──────────────┬──────────────┬─────┘
       │             │               │              │              │
       ▼             ▼               ▼              ▼              ▼
  Rate_Limiter  PII_Redactor   Prompt_Injector  Model_Allowlist  Output_Moderator
-               Guidelines_Bridge  Prompt_Library  Credential_Vault
+                                 Prompt_Library
                                                   Cost_Tracker
                                                   Transporter_Wrap
                                                        │
@@ -138,6 +134,10 @@ moderation (`wp_ability_execute_result`), and spend caps (`user_has_cap`) enforc
 on **all execution paths** — REST API, MCP servers, WP-CLI commands, and direct
 PHP `WP_Ability::execute()` calls. No bypass routes exist.
 
+**Native integration:** Prompt overrides use WordPress AI 1.3's per-ability
+`wpai_{slug}_system_instruction` filters. Guidelines use WordPress AI's native
+`wpai_use_guidelines` toggle (disable our plugin's version if you had it enabled).
+
 Two custom tables back the moving parts:
 
 - `wp_extend_ai_prompts` — one row per ability override (mode + template).
@@ -146,62 +146,20 @@ Two custom tables back the moving parts:
 
 ---
 
-## Site Guidelines integration
+## Site Guidelines
 
-[Guidelines](https://make.wordpress.org/ai/2026/03/23/guidelines-lands-in-gutenberg-22-7/)
-is a Gutenberg experiment (22.7+) giving site owners one place to define
-content standards: site context, copy/voice, image rules, and per-block rules.
-When it's active, this plugin feeds those standards into the prompt pipeline so
-**AI review notes reflect the site's actual editorial standards**, not generic
-style advice.
+**WordPress AI 1.3.0+ ships native Guidelines injection.**
 
-### How it behaves
+This plugin previously provided its own Guidelines integration, but that has been
+removed to avoid double-injection. Use WordPress AI's native support instead:
 
-- **Detection is automatic.** `Policy\Guidelines_Bridge` checks
-  `post_type_exists()` at call time — covering both the current
-  (`wp_guideline`) and the original 22.7 (`wp_content_guideline`) post type
-  names. No Gutenberg, or experiment off → every code path is a silent no-op.
-- **Editorial abilities get the section appended.** For `ai/editorial-notes`
-  and `ai/editorial-updates` (filterable), a delimited `## Site guidelines`
-  section is appended after the per-ability override and policy preamble.
-  Empty categories are omitted.
-- **Block rules are scoped.** When the ability passes a `post_id`, per-block
-  rules are narrowed to block types actually present in that post's content.
-- **Templates can place guidelines explicitly.** Prompt overrides may use
-  `{guidelines}`, `{guidelines_site}`, `{guidelines_copy}`,
-  `{guidelines_images}`, `{guidelines_additional}`, or `{guidelines_blocks}`.
-  Using any of them suppresses the automatic append, so the text never
-  appears twice.
-- **Audit trail.** Every injection fires `extend_ai_guidelines_applied` with
-  the guideline post ID and its latest revision ID — record it to answer
-  *"which version of our standards was this review based on?"*
+1. Install [Gutenberg plugin](https://wordpress.org/plugins/gutenberg/) 22.7+ and enable the Guidelines experiment
+2. Define your standards under **Settings → Guidelines**
+3. WordPress AI automatically appends guidelines to editorial abilities
+4. Control via `wpai_use_guidelines` filter (see [WordPress AI docs](https://github.com/WordPress/ai))
 
-### Setting it up on a real site
-
-1. Install the [Gutenberg plugin](https://wordpress.org/plugins/gutenberg/)
-   (22.7 or later) and enable the experiment under **Gutenberg → Experiments →
-   "Guidelines"**.
-2. Define your standards under **Settings → Guidelines** and save.
-3. On **Tools → AI Enterprise**, confirm the *Use site Guidelines* setting
-   reads *"Guidelines detected on this site"* (it's on by default).
-4. Run **Editorial Notes** on any post — the generated feedback now evaluates
-   content against your guidelines and cites them when flagging issues.
-
-> **Note:** newer versions of the WP AI plugin are growing their own native
-> Guidelines awareness. If your WP AI version already folds guidelines into
-> its default prompts, untick *Use site Guidelines* (or return `false` from
-> the `extend_ai_guidelines_enabled` filter) to avoid sending the standards
-> twice.
-
-### Knobs
-
-| Hook | Type | Purpose |
-| ---- | ---- | ------- |
-| `extend_ai_guidelines_enabled`   | filter | Kill switch on top of the admin toggle |
-| `extend_ai_guidelines_abilities` | filter | Which abilities get the auto-append (default: the two editorial ones) |
-| `extend_ai_guidelines_statuses`  | filter | Guideline post statuses considered live (default `publish` + `draft`, mirroring Gutenberg) |
-| `extend_ai_guidelines_text`      | filter | Rewrite the composed section before injection |
-| `extend_ai_guidelines_applied`   | action | `(ability, guideline_post_id, revision_id)` after each injection |
+Our versioned prompt library (Tools → AI Prompts) still works for all other
+prompt customizations using WordPress AI 1.3's per-ability filters.
 
 ---
 
@@ -264,9 +222,6 @@ declaratively. The most useful:
 | `extend_ai_token_rate_output`           | `float`                                       | $/1k output tokens                         |
 | `extend_ai_banned_phrases`              | `string[]`                                    | Output moderation phrase list              |
 | `extend_ai_prompt_variables`            | `array<string,scalar>`                        | Variables for prompt interpolation         |
-| `extend_ai_guidelines_enabled`          | `bool`                                        | Allow site-Guidelines injection            |
-| `extend_ai_guidelines_abilities`        | `string[]`                                    | Abilities that auto-receive guidelines     |
-| `extend_ai_guidelines_text`             | `string`                                      | Rewrite the composed guidelines section    |
 
 ### Stored options
 
@@ -284,7 +239,6 @@ extend_ai_banned_phrases         ARRAY     [ "phrase", … ]
 extend_ai_role_map               ARRAY     { ability_id: [role, role] }
 extend_ai_vault_enabled          BOOL      Delegate credential checks to vault.
 extend_ai_usage_retention_months INT       How far back to keep usage rows.
-extend_ai_use_guidelines         BOOL      Inject site Guidelines when detected. Default on.
 ```
 
 ---
