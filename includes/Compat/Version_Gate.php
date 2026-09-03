@@ -14,16 +14,16 @@ namespace ExtendAI\Enterprise\Compat;
 final class Version_Gate {
 
 	/** Lowest WP AI version we've verified against. */
-	public const TESTED_MIN = '1.0.0';
+	public const TESTED_MIN = '1.3.0';
 
 	/**
 	 * Ceiling of the WP AI compatibility band this build targets — NOT a version
-	 * we pin-test. We verify the band's endpoints in CI (currently 1.0.0 and
-	 * 1.0.1) and trust patch releases within it; the nightly drift cron and the
-	 * `@develop` contract leg catch real breakage. Raise this when moving the
-	 * band to a new minor (e.g. 1.1.x).
+	 * we pin-test. We verify the band's endpoints in CI (currently 1.3.0 and
+	 * any patch releases within 1.3.x) and trust patch releases within it; the
+	 * nightly drift cron and the `@develop` contract leg catch real breakage.
+	 * Raise this when moving the band to a new minor (e.g. 1.4.x).
 	 */
-	public const TESTED_MAX = '1.0.99';
+	public const TESTED_MAX = '1.3.99';
 
 	public function register(): void {
 		add_action( 'admin_notices', array( $this, 'maybe_notice' ) );

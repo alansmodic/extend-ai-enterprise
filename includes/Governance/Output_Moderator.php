@@ -3,8 +3,10 @@
  * Post-response moderation: scan model output for PII leaks, policy violations,
  * banned phrases, or hallucinated entities before it reaches the user.
  *
- * Strategy: filter the REST response for the abilities namespace. If the body
- * fails moderation, replace it with a safe error and log the incident.
+ * Strategy: intercept ability execution results via the WordPress 7.1
+ * wp_ability_execute_result lifecycle filter. This enforces moderation for all
+ * execution paths — REST, MCP, WP-CLI, and direct WP_Ability::execute() calls.
+ * If the output fails moderation, return a WP_Error that replaces the result.
  *
  * @package ExtendAI\Enterprise
  */
@@ -16,42 +18,56 @@ namespace ExtendAI\Enterprise\Governance;
 final class Output_Moderator {
 
 	public function register(): void {
-		add_filter( 'rest_post_dispatch', array( $this, 'moderate' ), 10, 3 );
+		add_filter( 'wp_ability_execute_result', array( $this, 'moderate' ), 10, 4 );
 	}
 
 	/**
-	 * @param \WP_REST_Response $response
-	 * @param \WP_REST_Server   $server
-	 * @param \WP_REST_Request  $request
-	 * @return \WP_REST_Response
+	 * Moderate ability execution results before they are returned to the caller.
+	 *
+	 * @param mixed       $result       The ability's execution result (before output validation).
+	 * @param string      $ability_name The ability that was executed (e.g. 'ai/title-generation').
+	 * @param mixed       $input        The normalized input.
+	 * @param \WP_Ability $ability      The ability instance.
+	 * @return mixed|\WP_Error Original result if clean, WP_Error if blocked.
 	 */
-	public function moderate( $response, $server, $request ) {
-		if ( ! str_contains( (string) $request->get_route(), 'wp-abilities/v1' ) ) {
-			return $response;
+	public function moderate( $result, string $ability_name, $input, $ability ) {
+		unset( $input, $ability );
+
+		// Only moderate AI abilities, not arbitrary WordPress abilities.
+		if ( ! str_starts_with( $ability_name, 'ai/' ) ) {
+			return $result;
 		}
 
-		$data = $response->get_data();
-		$text = $this->extract_text( $data );
+		// If execution already failed, don't double-moderate the error.
+		if ( is_wp_error( $result ) ) {
+			return $result;
+		}
+
+		$text = $this->extract_text( $result );
 		if ( $text === '' ) {
-			return $response;
+			return $result;
 		}
 
 		$violation = $this->scan( $text );
 		if ( $violation === null ) {
-			return $response;
+			return $result;
 		}
 
-		do_action( 'extend_ai_moderation_violation', $violation, $request, $text );
+		/**
+		 * Fires when model output is blocked by moderation.
+		 *
+		 * @param string $violation    The reason output was blocked.
+		 * @param string $ability_name The ability that was executed.
+		 * @param string $text         The text that failed moderation.
+		 * @param mixed  $result       The original result before blocking.
+		 */
+		do_action( 'extend_ai_moderation_violation', $violation, $ability_name, $text, $result );
 
-		$response->set_status( 451 );
-		$response->set_data(
-			array(
-				'code'    => 'extend_ai_output_blocked',
-				'message' => sprintf( 'AI output blocked: %s', $violation ),
-				'data'    => array( 'status' => 451 ),
-			)
+		return new \WP_Error(
+			'extend_ai_output_blocked',
+			sprintf( 'AI output blocked: %s', $violation ),
+			array( 'status' => 451 )
 		);
-		return $response;
 	}
 
 	private function extract_text( mixed $data ): string {
